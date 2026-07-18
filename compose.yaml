@@ -1,0 +1,138 @@
+name: traceframe
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-traceframe}
+      POSTGRES_USER: ${POSTGRES_USER:-traceframe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./apps/web/drizzle:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - application
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command:
+      - server
+      - /data
+      - --console-address
+      - :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-traceframe}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-local-development-only}
+    ports:
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test:
+        - CMD
+        - mc
+        - ready
+        - local
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - application
+    restart: unless-stopped
+
+  seed:
+    image: postgres:18-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    command:
+      - sh
+      - -c
+      - >-
+        psql
+        --host=db
+        --username=${POSTGRES_USER:-traceframe}
+        --dbname=${POSTGRES_DB:-traceframe}
+        --set=email="${AUTH_DEMO_EMAIL:-analyst@traceframe.local}"
+        --set=display_name="${AUTH_DEMO_NAME:-Morgan Reed}"
+        --set=password="${AUTH_DEMO_PASSWORD:-Traceframe!2026}"
+        --file=/seed/seed-demo-user.sql
+    volumes:
+      - ./db/seed-demo-user.sql:/seed/seed-demo-user.sql:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - application
+    restart: "no"
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://traceframe:local-development-only@db:5432/traceframe}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_BUCKET: ${MINIO_BUCKET:-case-source-material}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-traceframe}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-development-only}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - application
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./services/worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://traceframe:local-development-only@db:5432/traceframe}
+      POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-5}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,time,sys; p='/tmp/traceframe-worker-ready'; sys.exit(0 if os.path.exists(p) and time.time()-os.path.getmtime(p)<30 else 1)"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - application
+    restart: unless-stopped
+
+networks:
+  application:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
