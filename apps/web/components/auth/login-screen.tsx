@@ -205,6 +205,14 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
                 Find the signal.
                 <span className="block text-[#B1B9C6]">Keep the proof.</span>
               </motion.h1>
+              <motion.p
+                initial={skipIntro ? false : { opacity: 0, y: 12 }}
+                animate={showIntro ? {} : { opacity: 1, y: 0 }}
+                transition={{ delay: skipIntro ? 0 : 0.36, duration: skipIntro ? 0 : 0.5, ease: "easeOut" }}
+                className="mt-6 max-w-xl text-lg leading-8 tracking-[0.025em] text-[#B8C1CE]"
+              >
+                Organise investigations, preserve their context, and maintain a verifiable audit trail from first record to final review.
+              </motion.p>
             </div>
 
             <div className="relative hidden min-h-[22rem] place-items-center lg:grid" aria-hidden="true">
