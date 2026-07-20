@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-type AuditHashInput = {
+export type AuditHashInput = {
   actorId: string;
   action: string;
   objectType: string;

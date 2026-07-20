@@ -57,13 +57,10 @@ export async function createSession(userId: string) {
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
-  await sql.begin(async (transaction) => {
-    await transaction`DELETE FROM sessions WHERE expires_at <= now()`;
-    await transaction`
-      INSERT INTO sessions (token_hash, user_id, expires_at)
-      VALUES (${tokenHash}, ${userId}, ${expiresAt})
-    `;
-  });
+  await sql`
+    INSERT INTO sessions (token_hash, user_id, expires_at)
+    VALUES (${tokenHash}, ${userId}, ${expiresAt})
+  `;
 
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {

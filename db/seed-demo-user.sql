@@ -7,5 +7,5 @@ VALUES (
   crypt(:'password', gen_salt('bf', 12)),
   'analyst'
 )
-ON CONFLICT (email) DO UPDATE
+ON CONFLICT (lower(email)) DO UPDATE
 SET display_name = EXCLUDED.display_name;

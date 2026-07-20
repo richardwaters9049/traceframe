@@ -9,7 +9,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./apps/web/drizzle:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -20,6 +19,24 @@ services:
     networks:
       - application
     restart: unless-stopped
+
+  migrate:
+    image: postgres:18-alpine
+    environment:
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-traceframe}
+      PGUSER: ${POSTGRES_USER:-traceframe}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    command: ["sh", "/scripts/run-migrations.sh"]
+    volumes:
+      - ./apps/web/drizzle:/migrations:ro
+      - ./scripts/run-migrations.sh:/scripts/run-migrations.sh:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - application
+    restart: "no"
 
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
@@ -67,8 +84,8 @@ services:
     volumes:
       - ./db/seed-demo-user.sql:/seed/seed-demo-user.sql:ro
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - application
     restart: "no"
@@ -79,6 +96,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://traceframe:local-development-only@db:5432/traceframe}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_THROTTLE_SECRET: ${AUTH_THROTTLE_SECRET:-traceframe-local-throttle-change-in-production}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_BUCKET: ${MINIO_BUCKET:-case-source-material}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-traceframe}
@@ -86,8 +104,8 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
       seed:
@@ -113,8 +131,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://traceframe:local-development-only@db:5432/traceframe}
       POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-5}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD

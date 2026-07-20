@@ -18,8 +18,8 @@ export function ArchitectureWorkspace() {
       <div className="relative mt-12 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="pointer-events-none absolute left-[8%] right-[8%] top-8 hidden h-px bg-[linear-gradient(90deg,transparent,#7C8DFF55,#58D6C744,transparent)] xl:block" />
         {services.map(({ icon: Icon, name, purpose }, index) => (
-          <article key={name} className="relative rounded-[1.35rem] border border-white/[0.07] bg-[#10131A] p-5">
-            <div className="flex items-start justify-between"><span className="grid size-11 place-items-center rounded-xl bg-[#7C8DFF]/10 text-[#91A0FF]"><Icon className="size-5" /></span><span className="ui-meta font-mono text-[#8791A2]">0{index + 1}</span></div>
+          <article key={name} className="relative rounded-[1.35rem] border border-white/[0.07] bg-navigation p-5">
+            <div className="flex items-start justify-between"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><Icon className="size-5" /></span><span className="ui-meta font-mono text-[#8791A2]">0{index + 1}</span></div>
             <h2 className="ui-section-title mt-8">{name}</h2><p className="ui-meta mt-2 text-[#B0B8C6]">{purpose}</p>
           </article>
         ))}

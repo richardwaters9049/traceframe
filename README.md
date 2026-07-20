@@ -22,17 +22,22 @@ Traceframe currently provides a complete first vertical slice:
   views without putting workspace state into URLs.
 - An in-context drawer for creating cases with validated titles, summaries, and
   priorities.
-- A case register and individual case workspace with audit history.
-- Atomic case and audit-event creation backed by a linked SHA-256 digest chain.
+- A cursor-paginated case register and on-demand individual case workspace.
+- Atomic case and audit-event creation backed by a verified, monotonic global
+  SHA-256 ledger.
+- Login throttling, same-origin mutation checks, request correlation, and
+  enforced workspace role capabilities.
+- Versioned migrations that run on both fresh and existing Compose volumes.
 - Purposeful Motion transitions for login, workspace changes, drawers, sidebar
   behaviour, scrolling, and logout.
 - Docker health checks for the web application, PostgreSQL, MinIO, and Python
   worker.
 
-The Python worker currently establishes its database connection and publishes a
-health heartbeat. The ingestion job schema and MinIO service are in place, but
-source upload, object processing, and derived observations are planned work and
-are not yet exposed through the product interface.
+The Python worker currently establishes its database connection, publishes a
+health heartbeat, and performs scheduled expired-session cleanup. The ingestion
+job schema and MinIO service are in place, but source upload, object processing,
+and derived observations are planned work and are not yet exposed through the
+product interface.
 
 ## Product flow
 
@@ -86,6 +91,7 @@ Next.js web + Route Handlers ---- PostgreSQL
 | --- | --- | --- |
 | `web` | Next.js interface, authentication, and Route Handlers | <http://127.0.0.1:3000> |
 | `db` | Users, sessions, cases, jobs, and audit events | Internal only |
+| `migrate` | Applies versioned schema migrations before dependent services | One-shot internal service |
 | `worker` | Background-processing runtime and health heartbeat | Internal only |
 | `minio` | S3-compatible source-material storage | Console: <http://127.0.0.1:9001> |
 | `seed` | Idempotently creates or updates the local demo user | One-shot internal service |
@@ -150,7 +156,7 @@ Create a Python virtual environment before installing worker dependencies:
 ```sh
 cd services/worker
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 ## Verification
@@ -171,6 +177,20 @@ environment has been created:
 make test
 ```
 
+Run the container-backed API, browser, accessibility, and reflow suite:
+
+```sh
+make test-integration
+```
+
+The Playwright suite targets Chromium, Firefox, WebKit, and a narrow mobile
+viewport. Install its browser runtimes locally if they are not already present:
+
+```sh
+cd apps/web
+bunx playwright install chromium firefox webkit
+```
+
 For integration or container changes, rebuild the environment and wait for all
 health checks:
 
@@ -188,6 +208,7 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `POST` | `/api/auth/logout` | Revoke the current session |
 | `GET` | `/api/cases` | Return cases for an authenticated user |
 | `POST` | `/api/cases` | Validate and create a case with its first audit event |
+| `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
 | `GET` | `/api/health` | Report web and database availability |
 
 ## Security and integrity choices
@@ -203,8 +224,14 @@ curl -fsS http://127.0.0.1:3000/api/health
 - The audit actor is derived from the authenticated session, never from the
   request body.
 - Case creation and its initial audit event commit or roll back together.
-- A PostgreSQL advisory transaction lock serialises audit writers so each event
-  extends one unambiguous hash-chain head.
+- A locked PostgreSQL chain-head row assigns each global audit event a monotonic
+  sequence and ensures concurrent writers extend one unambiguous head.
+- Server-side verification recalculates every canonical event digest and checks
+  every sequence and predecessor link before the UI reports the ledger verified.
+- Mutating handlers reject cross-origin requests and all API responses include
+  a request ID for correlation.
+- Workspace roles are fail-closed: `analyst` and `admin` can read/create cases;
+  `reviewer` is read-only; unknown roles receive no case capability.
 - User-specific and case-specific dashboard data is dynamically rendered and is
   not cached across sessions.
 - The project contains synthetic information only.
@@ -219,7 +246,7 @@ network controls, monitoring, backups, and a formal threat review.
 traceframe/
 ├── apps/web/              Next.js application, Route Handlers, UI, and tests
 ├── db/                    Local demo-user seed
-├── docs/                  Architecture and brand decisions
+├── docs/                  Architecture, brand, and dated debt records
 ├── services/worker/       Python background-processing service
 ├── compose.yaml           Container topology and health checks
 ├── Makefile               Common build, test, and lifecycle commands
@@ -230,7 +257,19 @@ Further detail is available in:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Brand system](docs/BRAND.md)
+- [Technical debt review — 19/07/2026](docs/tech_debt/19-07-2026.md)
+- [Technical debt resolution — 20/07/2026](docs/tech_debt/20-07-2026.md)
 - [Agent guide](AGENTS.md)
+
+## Database upgrades
+
+`docker compose up` runs the one-shot `migrate` service before seed, web, and
+worker startup. Applied filenames are recorded in `schema_migrations`; reruns
+are idempotent, and existing pre-runner volumes are safely baselined before new
+migrations are applied. Never edit an applied migration—add a new forward
+migration. Before a production upgrade, take a PostgreSQL backup. Rollback is a
+restore from that backup or a reviewed forward corrective migration; destructive
+automatic down-migrations are intentionally not provided.
 
 ## Next milestones
 
@@ -238,5 +277,4 @@ Further detail is available in:
 - Create durable ingestion jobs in PostgreSQL.
 - Let the Python worker claim, process, retry, and complete those jobs safely.
 - Preserve provenance between source objects and derived observations.
-- Expand audit verification and surface chain-integrity failures.
-- Add broader accessibility, browser, integration, and security testing.
+- Surface source provenance and derived observations in the case workspace.

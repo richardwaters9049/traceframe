@@ -1,63 +1,76 @@
-# Initial architecture
+# Traceframe architecture
 
-## Context
+## Runtime boundaries
 
-Traceframe is a fictional incident-analysis workspace. It processes synthetic
-reports and must preserve their provenance, separate observations from
-hypotheses, restrict access, and provide a useful audit trail.
+Traceframe is a standalone synthetic incident-analysis workspace. Next.js owns
+the interface and same-origin Route Handlers, PostgreSQL owns transactional
+records and the audit ledger, MinIO reserves object storage for planned source
+material, and Python runs only as a background worker. PostgreSQL and the worker
+remain internal to the Compose network.
 
-The project is standalone. Other projects in the surrounding workspace are
-inspiration for engineering practices only and are not runtime dependencies.
+```text
+User browser
+    |
+    | 127.0.0.1:3000
+    v
+Next.js web and API ------> PostgreSQL
+        |                       ^
+        v                       |
+      MinIO              Python worker
+```
 
-## Containers
+The worker currently confirms database readiness, maintains its health
+heartbeat, and removes expired sessions hourly. Durable ingestion-job claiming
+and source processing remain planned functionality, not an HTTP service.
 
-    User browser
-        |
-        | 127.0.0.1:3000
-        v
-    Next.js web and API ------> PostgreSQL
-        |                          ^
-        v                          |
-    MinIO object storage <---- Python worker
+## Case queries and workspace state
 
-Next.js owns both the browser interface and same-origin Route Handlers. This
-avoids a separate browser-facing API origin and therefore avoids CORS in the
-normal deployment. Authentication, authorisation and input validation remain
-mandatory at every server boundary.
+The dashboard server component fetches a bounded 20-record summary page using a
+`(created_at, id)` cursor and verifies the global audit ledger. It does not load
+case audit histories. Selecting a case keeps navigation state inside
+`WorkspaceUIProvider` and fetches only that workspace from authenticated
+`GET /api/cases/:id`. Additional register pages use the same cursor through
+`GET /api/cases`. Only `/` and `/dashboard` are user-facing page routes.
 
-The Python process is a worker rather than an HTTP service. It will claim
-durable jobs from PostgreSQL and perform deterministic ingestion and
-normalisation work. PostgreSQL is the initial job queue so the first vertical
-slice does not require Redis.
+## Audit integrity
 
-## Case creation and audit integrity
+The ledger is global. Each case workspace is a filtered view of that ledger and
+therefore displays the result of global—not case-local—verification.
 
-`POST /api/cases` validates untrusted JSON with Zod before opening a database
-transaction. The transaction creates the case, acquires a PostgreSQL advisory
-lock, reads the previous audit digest, and writes a linked SHA-256 event. The
-case and audit event therefore commit or roll back as one unit, while the lock
-prevents concurrent writers from creating competing chain heads.
+`POST /api/cases` validates JSON, inserts the case, locks the singleton `global`
+row in `audit_chain_heads` with `SELECT ... FOR UPDATE`, assigns the next
+monotonic sequence, writes the linked SHA-256 event, and advances the head in
+one transaction. Wall-clock order is not used to choose predecessors.
 
-The audit actor is derived from the authenticated server-side user and is never
-accepted from the case-creation request body.
+Server-only verification reads canonical event fields in ledger-sequence order,
+checks that sequences are contiguous, checks each `previous_hash`, recalculates
+each digest, and returns a typed `verified`, `broken`, or `unavailable` result.
+The UI never claims verification without that result.
 
-## Authentication and sessions
+## Authentication, authorisation, and request security
 
-Local credentials are stored as bcrypt hashes in PostgreSQL using `pgcrypto`.
-Successful login creates a random 256-bit opaque token; only its SHA-256 digest
-is stored in the `sessions` table. The raw token is sent in an HttpOnly,
-SameSite cookie with an eight-hour expiry. Server-rendered pages and Route
-Handlers both perform a secure database-backed session check before accessing
-case data. Production deployments must set `AUTH_COOKIE_SECURE=true` behind
-HTTPS.
+Passwords are bcrypt hashes produced by PostgreSQL `pgcrypto`. Email addresses
+are normalised and protected by a unique index on `lower(email)`. Login creates
+a random 256-bit opaque token; only its SHA-256 digest is stored. The raw token
+uses an HttpOnly, SameSite cookie with an eight-hour expiry. Session reads also
+require an active user, and the worker removes expired records hourly.
 
-## Initial decisions
+Login throttling stores only a keyed hash of normalised account and network
+identity, applies bounded delay, and temporarily blocks repeated failures.
+State-changing handlers validate `Origin` against the effective request host.
+Responses include request IDs and server logs use structured event records
+without credentials or session tokens.
 
-- Use Server Components by default and isolate animation and interaction in
-  small Client Components.
-- Do not cache case-specific or user-specific information across sessions.
-- Keep original source material in object storage and derived records in
-  PostgreSQL.
-- Preserve provenance for all derived observations.
-- Use synthetic data only.
-- Publish local development ports on loopback, not all host interfaces.
+Role capabilities are explicit and fail closed: `analyst` and `admin` may read
+and create cases, `reviewer` may read only, and unknown roles receive no case
+access. This is workspace-level authorisation; case ownership or membership must
+be designed before cases are shared across separate workspaces.
+
+## Schema lifecycle
+
+The one-shot Compose `migrate` service applies ordered SQL migrations before
+seed, web, and worker startup and records filenames in `schema_migrations`.
+Existing volumes created before the runner are baselined by detecting their
+core tables. Migration failure stops dependent service startup. Applied files
+are immutable; upgrades use new forward migrations. Production rollback means
+restoring a pre-upgrade backup or applying a reviewed corrective migration.

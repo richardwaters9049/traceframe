@@ -4,11 +4,9 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from "react";
-import { AnimatePresence } from "motion/react";
 
 import { NewCaseDrawer } from "@/components/cases/new-case-drawer";
 
@@ -19,7 +17,7 @@ type WorkspaceUIContextValue = {
   showDashboard: () => void;
   showArchitecture: () => void;
   openCase: (caseId: string) => void;
-  openNewCase: () => void;
+  openNewCase: (opener?: HTMLElement) => void;
   closeNewCase: () => void;
 };
 
@@ -29,25 +27,15 @@ export function WorkspaceUIProvider({ children }: { children: React.ReactNode })
   const [isCreatingCase, setIsCreatingCase] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceUIContextValue["activeView"]>("dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [caseOpener, setCaseOpener] = useState<HTMLElement | null>(null);
   const showDashboard = useCallback(() => { setActiveView("dashboard"); setSelectedCaseId(null); }, []);
   const showArchitecture = useCallback(() => { setActiveView("architecture"); setSelectedCaseId(null); }, []);
   const openCase = useCallback((caseId: string) => { setSelectedCaseId(caseId); setActiveView("case"); }, []);
-  const openNewCase = useCallback(() => setIsCreatingCase(true), []);
+  const openNewCase = useCallback((opener?: HTMLElement) => {
+    setCaseOpener(opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null));
+    setIsCreatingCase(true);
+  }, []);
   const closeNewCase = useCallback(() => setIsCreatingCase(false), []);
-
-  useEffect(() => {
-    document.body.style.overflow = isCreatingCase ? "hidden" : "";
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") closeNewCase();
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [closeNewCase, isCreatingCase]);
 
   const value = useMemo(
     () => ({ activeView, selectedCaseId, isCreatingCase, showDashboard, showArchitecture, openCase, openNewCase, closeNewCase }),
@@ -57,9 +45,7 @@ export function WorkspaceUIProvider({ children }: { children: React.ReactNode })
   return (
     <WorkspaceUIContext.Provider value={value}>
       {children}
-      <AnimatePresence>
-        {isCreatingCase ? <NewCaseDrawer onClose={closeNewCase} /> : null}
-      </AnimatePresence>
+      <NewCaseDrawer open={isCreatingCase} onClose={closeNewCase} opener={caseOpener} />
     </WorkspaceUIContext.Provider>
   );
 }
@@ -80,7 +66,7 @@ export function NewCaseButton({
   const { openNewCase } = useWorkspaceUI();
 
   return (
-    <button type="button" onClick={openNewCase} className={className}>
+    <button type="button" onClick={(event) => openNewCase(event.currentTarget)} className={className}>
       {children}
     </button>
   );

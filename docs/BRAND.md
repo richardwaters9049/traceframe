@@ -40,3 +40,11 @@ signal-acquisition sequence before revealing the signal-field composition.
 Users who prefer reduced motion receive an almost immediate transition.
 Credentials live in a compact access dock rather than a conventional
 split-screen login card.
+
+Workspace density uses explicit spacing and sidebar-width tokens at normal CSS
+scale. The application does not use `zoom` or whole-canvas transforms, so focus
+geometry, sticky positioning, pointer coordinates, and browser accessibility
+zoom remain native. Base UI dialog primitives provide focus trapping, inert
+backgrounds, Escape dismissal, and focus restoration for the case drawer and
+mobile navigation. Repeated brand surfaces are exposed as theme tokens,
+including background, navigation, raised, primary, primary-hover, and accent.

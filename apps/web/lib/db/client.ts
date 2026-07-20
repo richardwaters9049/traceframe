@@ -19,9 +19,9 @@ export function getDatabaseClient() {
       connect_timeout: 10,
     });
 
-  if (process.env.NODE_ENV !== "production") {
-    globalForDatabase.traceframeSql = sql;
-  }
+  // Reuse one bounded pool per server process. Creating a pool per production
+  // request leaks connections and can exhaust PostgreSQL under parallel load.
+  globalForDatabase.traceframeSql = sql;
 
   return sql;
 }

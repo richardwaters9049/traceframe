@@ -19,7 +19,7 @@ export function BrandMark({
 
   return (
     <span className={cn("inline-flex items-center", isCompact ? "gap-3" : "gap-3.5", className)}>
-      <span className="relative grid shrink-0 place-items-center before:absolute before:inset-1 before:-z-10 before:rounded-2xl before:bg-[#7C8DFF]/20 before:blur-lg">
+      <span className="relative grid shrink-0 place-items-center before:absolute before:inset-1 before:-z-10 before:rounded-2xl before:bg-primary/20 before:blur-lg">
         <Image
           src="/traceframe-mark.svg"
           alt=""
@@ -33,10 +33,10 @@ export function BrandMark({
           className={cn(
             "font-semibold tracking-[0.035em]",
             wordmarkSize,
-            tone === "light" ? "text-[#F5F7FA]" : "text-[#11141B]",
+            tone === "light" ? "text-foreground" : "text-[#11141B]",
           )}
         >
-          Trace<span className={tone === "light" ? "text-[#AAB3C3]" : "text-[#535B6B]"}>frame</span><span className="text-[#58D6C7]">.</span>
+          Trace<span className={tone === "light" ? "text-[#AAB3C3]" : "text-[#535B6B]"}>frame</span><span className="text-accent">.</span>
         </span>
       ) : null}
     </span>

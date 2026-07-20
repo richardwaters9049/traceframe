@@ -30,6 +30,7 @@ export type CaseRecord = {
 
 export type AuditEventRecord = {
   id: string;
+  ledgerSequence: number;
   actorId: string;
   action: string;
   objectType: string;
@@ -38,4 +39,11 @@ export type AuditEventRecord = {
   eventHash: string;
   previousHash: string | null;
   createdAt: string;
+};
+
+export type CaseCursorPage = {
+  cases: CaseRecord[];
+  nextCursor: string | null;
+  totalCount: number;
+  urgentCount: number;
 };

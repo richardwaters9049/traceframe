@@ -4,7 +4,9 @@ import { ArrowUpRight, FolderOpen } from "lucide-react";
 import { motion } from "motion/react";
 
 import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
-import type { CaseRecord } from "@/lib/cases/contracts";
+import { useState } from "react";
+import type { CaseCursorPage } from "@/lib/cases/contracts";
+import { apiRequest } from "@/lib/http/client";
 
 const priorityStyles: Record<string, string> = {
   standard: "bg-white/[0.055] text-[#A5ADBC] ring-white/[0.08]",
@@ -12,10 +14,25 @@ const priorityStyles: Record<string, string> = {
   critical: "bg-red-300/[0.08] text-red-200 ring-red-300/15",
 };
 
-export function CaseRegister({ cases }: { cases: CaseRecord[] }) {
+export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
   const { openCase } = useWorkspaceUI();
+  const [cases, setCases] = useState(initialPage.cases);
+  const [nextCursor, setNextCursor] = useState(initialPage.nextCursor);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadMore() {
+    if (!nextCursor || isLoading) return;
+    setIsLoading(true); setError(null);
+    const result = await apiRequest<CaseCursorPage>(`/api/cases?cursor=${encodeURIComponent(nextCursor)}`);
+    if (result.ok) {
+      setCases((current) => [...current, ...result.data.cases]);
+      setNextCursor(result.data.nextCursor);
+    } else setError(result.error);
+    setIsLoading(false);
+  }
   return (
-    <motion.section initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.45, delay: 0.18 }} className="flex min-h-[26rem] min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-white/[0.07] bg-[#10131A] shadow-2xl shadow-black/10">
+    <motion.section initial={{ opacity: 0, scale: 0.99 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.45, delay: 0.18 }} className="flex min-h-[26rem] min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-white/[0.07] bg-navigation shadow-2xl shadow-black/10">
       <div className="grid gap-1 border-b border-white/[0.06] px-5 py-4 sm:px-6">
         <h2 className="ui-section-title">Active register</h2>
         <p className="ui-meta text-[#B6BECA]">Select a record to open its investigation workspace.</p>
@@ -23,7 +40,7 @@ export function CaseRegister({ cases }: { cases: CaseRecord[] }) {
 
       {cases.length ? (
         <div className="min-w-0 flex-1">
-          <div className="ui-label hidden grid-cols-[3.5rem_minmax(0,1fr)_7rem_7rem] border-b border-white/[0.06] px-6 py-3 uppercase tracking-[0.12em] text-[#747D8E] md:grid">
+          <div className="ui-label hidden grid-cols-[3.5rem_minmax(0,1fr)_7rem_7rem] border-b border-white/[0.06] px-6 py-3 uppercase tracking-[0.12em] text-[#8791A3] md:grid">
             <span>No.</span>
             <span>Case</span>
             <span>Opened</span>
@@ -33,15 +50,16 @@ export function CaseRegister({ cases }: { cases: CaseRecord[] }) {
           {cases.map((caseRecord, index) => (
             <motion.button
               key={caseRecord.id}
+              data-testid="case-row"
               type="button"
               onClick={() => openCase(caseRecord.id)}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.28 + index * 0.07, duration: 0.35 }}
               whileHover={{ x: 3 }}
-              className="group grid w-full min-w-0 gap-3 border-b border-white/[0.055] px-5 py-5 text-left transition-colors last:border-b-0 hover:bg-[#7C8DFF]/[0.055] md:grid-cols-[3.5rem_minmax(0,1fr)_7rem_7rem] md:items-center md:px-6"
+              className="group grid w-full min-w-0 gap-3 border-b border-white/[0.055] px-5 py-5 text-left transition-colors last:border-b-0 hover:bg-primary/[0.055] md:grid-cols-[3.5rem_minmax(0,1fr)_7rem_7rem] md:items-center md:px-6"
             >
-              <span className="ui-meta hidden font-mono text-[#687284] md:block">
+              <span className="ui-meta hidden font-mono text-[#8A94A6] md:block">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <div className="min-w-0">
@@ -63,6 +81,14 @@ export function CaseRegister({ cases }: { cases: CaseRecord[] }) {
               </span>
             </motion.button>
           ))}
+          {nextCursor ? (
+            <div className="grid justify-items-center gap-2 px-5 py-4">
+              <button type="button" disabled={isLoading} onClick={loadMore} className="ui-label min-w-36 rounded-xl border border-white/[0.1] bg-white/[0.035] px-4 py-2.5 text-[#D8DDE5] hover:bg-white/[0.075] disabled:opacity-60">
+                {isLoading ? "Loading…" : "Load more cases"}
+              </button>
+              {error ? <p role="alert" className="ui-meta text-red-200">{error}</p> : null}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="grid flex-1 place-items-center p-8 text-center">

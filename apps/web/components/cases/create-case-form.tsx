@@ -10,12 +10,7 @@ import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-type CreateCaseResponse = {
-  case?: { id: string };
-  error?: string;
-  issues?: Array<{ field: string; message: string }>;
-};
+import { apiRequest } from "@/lib/http/client";
 
 export function CreateCaseForm() {
   const router = useRouter();
@@ -31,7 +26,7 @@ export function CreateCaseForm() {
     const form = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch("/api/cases", {
+      const result = await apiRequest<{ case: { id: string } }>("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -40,11 +35,8 @@ export function CreateCaseForm() {
           priority: form.get("priority"),
         }),
       });
-      const result = (await response.json()) as CreateCaseResponse;
-
-      if (!response.ok || !result.case) {
-        const fieldIssue = result.issues?.[0]?.message;
-        setError(fieldIssue ?? result.error ?? "The case could not be created.");
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
 
@@ -126,7 +118,7 @@ export function CreateCaseForm() {
           type="submit"
           size="lg"
           disabled={isSubmitting}
-          className="h-12 rounded-xl bg-[#7C8DFF] text-sm font-semibold tracking-[0.035em] text-[#090B10] hover:bg-[#93A1FF] disabled:opacity-70"
+          className="h-12 rounded-xl bg-primary text-sm font-semibold tracking-[0.035em] text-background hover:bg-primary-hover disabled:opacity-70"
         >
           {isSubmitting ? (
             <>

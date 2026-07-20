@@ -9,8 +9,7 @@ import { BrandMark } from "@/components/brand/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-type LoginResponse = { error?: string };
+import { apiRequest } from "@/lib/http/client";
 
 function LoadingSequence({ onComplete }: { onComplete: () => void }) {
   const reduceMotion = useReducedMotion();
@@ -26,7 +25,7 @@ function LoadingSequence({ onComplete }: { onComplete: () => void }) {
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.025, filter: "blur(8px)" }}
       transition={{ duration: reduceMotion ? 0.01 : 0.45, ease: "easeInOut" }}
-      className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-[#080A0F]"
+      className="fixed inset-0 z-50 grid place-items-center overflow-hidden bg-background"
     >
       <motion.div
         initial={{ scale: 0.5, opacity: 0 }}
@@ -53,7 +52,7 @@ function LoadingSequence({ onComplete }: { onComplete: () => void }) {
             initial={{ x: -270, y: -150, opacity: 0, scale: 0.5 }}
             animate={{ x: [-270, -170, -72, 0], y: [-150, 64, -32, 0], opacity: [0, 1, 1, 0], scale: [0.5, 1, 0.8, 0.2] }}
             transition={{ duration: 1.25, delay: 0.12, ease: "easeInOut" }}
-            className="absolute size-2.5 rounded-full bg-[#7C8DFF] shadow-[0_0_20px_#7C8DFF]"
+            className="absolute size-2.5 rounded-full bg-primary shadow-[0_0_20px_#7C8DFF]"
           />
           <motion.span
             initial={{ x: 260, y: 138, opacity: 0, scale: 0.5 }}
@@ -131,7 +130,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
     const formData = new FormData(event.currentTarget);
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const result = await apiRequest<{ user: { id: string } }>("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -139,10 +138,8 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
           password: formData.get("password"),
         }),
       });
-      const result = (await response.json()) as LoginResponse;
-
-      if (!response.ok) {
-        setError(result.error ?? "Sign in failed.");
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
 
@@ -172,7 +169,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
           filter: isEnteringWorkspace && !reduceMotion ? "blur(6px)" : "blur(0px)",
         }}
         transition={{ duration: skipIntro || reduceMotion ? 0.01 : 0.55, delay: showIntro || skipIntro ? 0 : 0.12 }}
-        className="relative flex min-h-screen flex-col overflow-hidden bg-[#080A0F] text-[#F5F7FA]"
+        className="relative flex min-h-screen flex-col overflow-hidden bg-background text-foreground"
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_65%_36%,rgba(124,141,255,0.13),transparent_25%),radial-gradient(circle_at_78%_66%,rgba(88,214,199,0.07),transparent_24%)]" />
         <div className="pointer-events-none absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(255,255,255,0.022)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] [background-size:80px_80px]" />
@@ -221,13 +218,13 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
                 transition={{ duration: 34, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
                 className="absolute size-[22rem] rounded-full border border-dashed border-[#7C8DFF]/20"
               >
-                <span className="absolute left-1/2 top-[-4px] size-2 -translate-x-1/2 rounded-full bg-[#7C8DFF] shadow-[0_0_18px_#7C8DFF]" />
+                <span className="absolute left-1/2 top-[-4px] size-2 -translate-x-1/2 rounded-full bg-primary shadow-[0_0_18px_#7C8DFF]" />
                 <span className="absolute bottom-[12%] right-[10%] size-1.5 rounded-full bg-[#58D6C7] shadow-[0_0_15px_#58D6C7]" />
               </motion.div>
               <motion.div
                 animate={reduceMotion ? {} : { scale: [1, 1.035, 1], opacity: [0.55, 0.9, 0.55] }}
                 transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }}
-                className="absolute size-56 rounded-full border border-[#7C8DFF]/20 bg-[#7C8DFF]/[0.025]"
+                className="absolute size-56 rounded-full border border-[#7C8DFF]/20 bg-primary/[0.025]"
               />
               <div className="absolute h-px w-[30rem] bg-[linear-gradient(90deg,transparent,#7C8DFF33,#58D6C733,transparent)]" />
               <div className="absolute h-[26rem] w-px bg-[linear-gradient(transparent,#7C8DFF22,transparent)]" />
@@ -243,7 +240,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
             initial={skipIntro ? false : { opacity: 0, y: 24 }}
             animate={showIntro ? {} : { opacity: 1, y: 0 }}
             transition={{ delay: skipIntro ? 0 : 0.38, duration: skipIntro ? 0 : 0.5, ease: "easeOut" }}
-            className="mx-auto max-w-7xl rounded-[1.6rem] border border-white/[0.08] bg-[#10131A]/95 p-4 shadow-[0_-18px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:p-5"
+            className="mx-auto max-w-7xl rounded-[1.6rem] border border-white/[0.08] bg-navigation/95 p-4 shadow-[0_-18px_70px_rgba(0,0,0,0.22)] backdrop-blur-xl sm:p-5"
           >
             <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[0.62fr_1fr_1fr_auto] lg:items-end">
               <div className="hidden pb-1 lg:block">
@@ -252,7 +249,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-xs font-medium uppercase tracking-[0.12em] text-[#A6AFBE]">Email</Label>
-                <Input id="email" name="email" type="email" autoComplete="username" required defaultValue="analyst@traceframe.local" className="h-11 rounded-xl border-white/[0.08] bg-white/[0.035] px-4 text-sm tracking-[0.025em] text-[#F5F7FA] focus-visible:border-[#7C8DFF]/60 focus-visible:ring-[#7C8DFF]/15" />
+                <Input id="email" name="email" type="email" autoComplete="username" required defaultValue="analyst@traceframe.local" className="h-11 rounded-xl border-white/[0.08] bg-white/[0.035] px-4 text-sm tracking-[0.025em] text-foreground focus-visible:border-[#7C8DFF]/60 focus-visible:ring-[#7C8DFF]/15" />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
@@ -260,13 +257,13 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
                   <span className="whitespace-nowrap text-sm leading-6 tracking-[0.03em] text-[#A5AEBE]">Demo: Traceframe!2026</span>
                 </div>
                 <div className="relative">
-                  <Input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required minLength={8} className="h-11 rounded-xl border-white/[0.08] bg-white/[0.035] px-4 pr-11 text-sm tracking-[0.025em] text-[#F5F7FA] focus-visible:border-[#7C8DFF]/60 focus-visible:ring-[#7C8DFF]/15" />
+                  <Input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required minLength={8} className="h-11 rounded-xl border-white/[0.08] bg-white/[0.035] px-4 pr-11 text-sm tracking-[0.025em] text-foreground focus-visible:border-[#7C8DFF]/60 focus-visible:ring-[#7C8DFF]/15" />
                   <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 grid w-11 place-items-center text-[#667083] hover:text-[#C3C9D3]" aria-label={showPassword ? "Hide password" : "Show password"}>
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
                 </div>
               </div>
-              <Button type="submit" disabled={isSubmitting || isEnteringWorkspace} className="h-11 w-full justify-center rounded-xl bg-[#7C8DFF] px-4 text-sm font-semibold tracking-[0.035em] text-[#090B10] hover:bg-[#93A1FF] lg:w-36">
+              <Button type="submit" disabled={isSubmitting || isEnteringWorkspace} className="h-11 w-full justify-center rounded-xl bg-primary px-4 text-sm font-semibold tracking-[0.035em] text-background hover:bg-primary-hover lg:w-36">
                 {isSubmitting ? <><LoaderCircle className="animate-spin" /> Checking…</> : <>Continue <ArrowRight /></>}
               </Button>
             </form>
@@ -282,7 +279,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
 
       <AnimatePresence>
         {isEnteringWorkspace ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[80] grid place-items-center overflow-hidden bg-[#080A0F]">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[80] grid place-items-center overflow-hidden bg-background">
             <motion.div initial={{ scale: 0.6, rotate: -12 }} animate={{ scale: [0.6, 1.08, 1], rotate: 0 }} transition={{ duration: 0.55, ease: "easeOut" }} className="relative grid size-28 place-items-center rounded-[2rem] border border-[#7C8DFF]/25 bg-[#111620] text-[#9FACFF] shadow-[0_0_90px_rgba(124,141,255,0.2)]">
               <ScanLine className="size-11" />
               <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 2.2, opacity: [0, 0.5, 0] }} transition={{ duration: 0.7 }} className="absolute inset-0 rounded-[2rem] border border-[#58D6C7]/45" />

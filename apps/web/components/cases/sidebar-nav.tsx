@@ -19,12 +19,12 @@ export function SidebarNav({ collapsed = false }: { collapsed?: boolean }) {
         <button
           key={label}
           type="button"
-          onClick={action}
+          onClick={(event) => action(event.currentTarget)}
           title={collapsed ? label : undefined}
           className={`relative flex h-11 w-full items-center rounded-xl text-base tracking-[0.025em] transition-colors ${collapsed ? "justify-center px-0" : "gap-3 px-3"} ${active ? "text-white" : "text-[#8991A2] hover:bg-white/[0.045] hover:text-[#E8EBF2]"}`}
         >
           {active ? (
-            <motion.span layoutId="sidebar-active" className="absolute inset-0 rounded-xl bg-[#7C8DFF]/14 ring-1 ring-inset ring-[#7C8DFF]/20" transition={{ type: "spring", duration: 0.45, bounce: 0.15 }} />
+            <motion.span layoutId="sidebar-active" className="absolute inset-0 rounded-xl bg-primary/14 ring-1 ring-inset ring-[#7C8DFF]/20" transition={{ type: "spring", duration: 0.45, bounce: 0.15 }} />
           ) : null}
           <Icon className={`relative size-[18px] ${active ? "text-[#8FA0FF]" : ""}`} aria-hidden="true" />
           <AnimatePresence initial={false}>

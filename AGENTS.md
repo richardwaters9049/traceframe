@@ -19,16 +19,18 @@ project and the role it supports.
 ## Technology and service boundaries
 
 - Frontend and browser-facing server: Next.js 16, React 19, TypeScript,
-  Tailwind CSS 4, shadcn-style components, and Motion/Framer Motion APIs.
+  Tailwind CSS 4, shadcn-style components, Base UI, and Motion APIs.
 - JavaScript package manager and runtime: Bun. Do not introduce npm, pnpm, or
   Yarn lockfiles.
 - Browser API boundary: same-origin Next.js Route Handlers under `app/api`.
   Do not add FastAPI, Spring Boot, or a second browser-facing API service.
 - Database: PostgreSQL with Drizzle ORM.
 - Object storage: MinIO for original source material.
-- Background processing: Python worker. It is not an HTTP server.
+- Background processing: Python worker. It is not an HTTP server; it currently
+  maintains readiness/health state and removes expired sessions hourly.
 - Local orchestration: Docker Compose. The web app, worker, database, and MinIO
-  must continue to run as containers.
+  must continue to run as containers. The one-shot `migrate` service must finish
+  successfully before seed, web, and worker startup.
 
 Next.js owns the UI and its same-origin HTTP boundary, so normal browser flows
 do not require CORS. Authentication, authorisation, validation, and safe data
@@ -51,6 +53,27 @@ actions. Existing legacy redirects may remain for safe navigation.
 Prefer Server Components. Add `"use client"` only where browser interaction,
 local state, or animation requires it, and keep client boundaries focused.
 
+## Current product state
+
+The completed application slice includes authentication, a responsive protected
+workspace, a paginated case register, on-demand case workspaces, case creation,
+and a globally verified audit ledger. Keep these current boundaries intact:
+
+- The dashboard fetches a bounded 20-record summary page; it must not eagerly
+  load every case workspace or audit history.
+- `GET /api/cases` uses opaque `(created_at, id)` cursor pagination and caps a
+  page at 50 records.
+- `GET /api/cases/:id` loads one selected workspace on demand.
+- `POST /api/cases` creates the case and its first global audit event atomically.
+- The global audit verifier reports typed `verified`, `broken`, or `unavailable`
+  states. A case audit view is only a filtered view of that global ledger.
+
+MinIO is provisioned and the ingestion-job schema exists, but source upload,
+durable job claiming/retries, evidence normalisation, provenance, and derived
+observations are planned product work. Do not describe those features as
+implemented, and do not treat their absence as unresolved debt from the
+19/07/2026 review.
+
 ## Security invariants
 
 - Use synthetic data only. Never add real personal, investigative, or sensitive
@@ -60,13 +83,25 @@ local state, or animation requires it, and keep client boundaries focused.
   never accept them from browser payloads.
 - Keep the opaque session token in an HttpOnly, SameSite cookie and store only
   its SHA-256 digest in PostgreSQL.
-- Preserve the atomic case-and-first-audit-event transaction and linked audit
-  digest. Do not weaken its advisory-lock concurrency protection.
+- Preserve database-backed login throttling, generic authentication failures,
+  normalised email lookup, and uniqueness on `lower(email)`.
+- Require explicit same-origin validation on every state-changing Route Handler.
+- Enforce role capabilities at the server boundary: `analyst` and `admin` may
+  read/create cases, `reviewer` is read-only, and unknown roles fail closed.
+- Preserve the atomic case-and-first-audit-event transaction. The transaction
+  must lock the singleton `audit_chain_heads` row with `SELECT ... FOR UPDATE`,
+  assign the next monotonic `ledger_sequence`, append the event, and advance the
+  head. Do not reintroduce timestamp-derived ordering or weaken this row lock.
+- Keep audit hashing and verification server-only. Recalculate canonical event
+  digests and check sequence/predecessor continuity before reporting a verified
+  ledger.
 - Do not cache user-specific or case-specific data across sessions.
 - Keep PostgreSQL and the Python worker internal to the Compose network. Bind
   local published ports to loopback.
 - Do not expose secrets or local credentials in logs, client bundles, URLs, or
   new committed files. The documented demo credentials are local-only fixtures.
+- Keep structured request IDs on API responses and server logs. Never log raw
+  session tokens, passwords, throttle identities, or source material.
 
 ## UI and interaction rules
 
@@ -118,7 +153,7 @@ a virtual environment before installing Python dependencies:
 ```sh
 cd services/worker
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
 Frontend commands use Bun:
@@ -135,12 +170,25 @@ bun run build
 Whole-project commands run from the repository root:
 
 ```sh
-cp .env.example .env
+make bootstrap
 make up
 make status
 make test
+make test-integration
 make down
 ```
+
+`make bootstrap` checks Bun, Python, and Docker, creates `.env` if needed,
+installs frozen Bun dependencies, and prepares the worker virtual environment.
+`make test` runs the web and worker checks. `make test-integration` rebuilds the
+Compose environment and runs the Playwright API, browser, accessibility, and
+reflow suite across Chromium, Firefox, WebKit, and a narrow mobile project.
+
+Schema changes use immutable, ordered SQL files under `apps/web/drizzle`. Do not
+edit an applied migration. Add a new forward migration and keep
+`scripts/run-migrations.sh` compatible with fresh and existing volumes. Rollback
+is a pre-upgrade PostgreSQL restore or a reviewed corrective forward migration,
+not an automatic destructive down-migration.
 
 Do not delete Compose volumes unless the user explicitly requests a data reset.
 Do not overwrite unrelated or uncommitted user changes.
@@ -157,9 +205,11 @@ bun test
 bun run build
 ```
 
-For worker changes, also run:
+For worker changes, run:
 
 ```sh
+services/worker/.venv/bin/python -m ruff check services/worker/src services/worker/tests
+services/worker/.venv/bin/python -m pytest -q services/worker/tests
 services/worker/.venv/bin/python -m compileall -q services/worker/src
 ```
 
@@ -170,7 +220,13 @@ confirm health:
 docker compose up -d --build --wait
 docker compose ps
 curl -fsS http://127.0.0.1:3000/api/health
+cd apps/web && bun run test:e2e
 ```
+
+When changing layout, modal behaviour, navigation, or motion, run the relevant
+Playwright projects and also inspect desktop and narrow layouts visually at 100%
+browser zoom. Preserve the tested no-horizontal-overflow behaviour at viewport
+equivalents of 100%, 125%, 200%, and 400% zoom.
 
 Report what changed and which checks actually ran. Do not claim visual or
 runtime verification that was not performed.
@@ -182,5 +238,8 @@ runtime verification that was not performed.
 - Update `docs/BRAND.md` when tokens, typography, identity, or interaction rules
   change.
 - Keep `README.md` accurate for setup, services, and the main workflow.
+- Preserve dated technical-debt history under `docs/tech_debt`. Add a new dated
+  record for a future review rather than rewriting the 19/07/2026 assessment or
+  20/07/2026 resolution report.
 - Do not commit, push, create branches, or open pull requests unless the user
   explicitly asks for that Git operation.

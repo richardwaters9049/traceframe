@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, Search, ShieldCheck, Triangle, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 
 import { BrandMark } from "@/components/brand/brand-mark";
 import { SidebarNav } from "@/components/cases/sidebar-nav";
 import { NewCaseButton } from "@/components/cases/workspace-ui-provider";
+import { apiRequest } from "@/lib/http/client";
 
 function initials(name: string) {
   return name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
@@ -28,6 +30,8 @@ export function WorkspaceFrame({
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSignOutPending, setIsSignOutPending] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [scrollNavigation, setScrollNavigation] = useState({ isScrollable: false, isAtBottom: false });
 
   useEffect(() => {
@@ -58,23 +62,6 @@ export function WorkspaceFrame({
     };
   }, []);
 
-  useEffect(() => {
-    if (!isMobileSidebarOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsMobileSidebarOpen(false);
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [isMobileSidebarOpen]);
-
   function moveThroughPage() {
     window.scrollTo({
       top: scrollNavigation.isAtBottom ? 0 : document.documentElement.scrollHeight,
@@ -83,29 +70,31 @@ export function WorkspaceFrame({
   }
 
   async function signOut() {
-    if (isSigningOut) return;
-    setIsSigningOut(true);
-
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      await new Promise((resolve) => window.setTimeout(resolve, reduceMotion ? 80 : 1250));
-      router.replace("/");
-      router.refresh();
-    } catch {
-      setIsSigningOut(false);
+    if (isSignOutPending || isSigningOut) return;
+    setIsSignOutPending(true);
+    setSignOutError(null);
+    const result = await apiRequest<{ ok: true }>("/api/auth/logout", { method: "POST" });
+    setIsSignOutPending(false);
+    if (!result.ok) {
+      setSignOutError(result.error);
+      return;
     }
+    setIsSigningOut(true);
+    await new Promise((resolve) => window.setTimeout(resolve, reduceMotion ? 80 : 1250));
+    router.replace("/");
+    router.refresh();
   }
 
   return (
-    <main className="workspace-canvas min-h-screen overflow-x-clip bg-[#080A0F] text-[#F5F7FA]">
+    <main className="workspace-canvas min-h-screen overflow-x-clip bg-background text-foreground">
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, scale: 0.992 }}
         animate={{
           opacity: 1,
           scale: 1,
           gridTemplateColumns: isSidebarOpen
-            ? "18.5rem minmax(0, 1fr)"
-            : "5.75rem minmax(0, 1fr)",
+            ? "16.5rem minmax(0, 1fr)"
+            : "5.25rem minmax(0, 1fr)",
         }}
         transition={{
           opacity: { duration: 0.45 },
@@ -115,7 +104,7 @@ export function WorkspaceFrame({
         className="lg:grid lg:min-h-[var(--workspace-height)]"
       >
         <aside className="sticky top-0 z-20 hidden h-[var(--workspace-height)] self-start p-3 pr-0 lg:block">
-          <div className="flex h-[calc(var(--workspace-height)-1.5rem)] flex-col overflow-hidden rounded-[1.45rem] border border-white/[0.07] bg-[#10131A] p-3 shadow-2xl shadow-black/20">
+          <div className="flex h-[calc(var(--workspace-height)-1.5rem)] flex-col overflow-hidden rounded-[1.45rem] border border-white/[0.07] bg-navigation p-3 shadow-2xl shadow-black/20">
             <div className="pointer-events-none absolute -right-20 -top-20 size-48 rounded-full border-[30px] border-[#7C8DFF]/[0.055]" />
             <div className={`relative flex h-[8.5rem] flex-col justify-center py-2 ${isSidebarOpen ? "gap-3 px-2" : "items-center gap-2"}`}>
               <Link href="/dashboard" className="min-w-0 overflow-hidden" aria-label="Traceframe dashboard">
@@ -124,7 +113,7 @@ export function WorkspaceFrame({
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen((open) => !open)}
-                className={`flex shrink-0 items-center rounded-xl border border-white/[0.08] bg-black/10 text-[#C5CCD7] transition-colors hover:border-[#7C8DFF]/30 hover:bg-[#7C8DFF]/10 hover:text-white ${isSidebarOpen ? "h-10 w-full justify-between px-3 text-sm font-medium tracking-[0.035em]" : "size-10 justify-center"}`}
+                className={`flex shrink-0 items-center rounded-xl border border-white/[0.08] bg-black/10 text-[#C5CCD7] transition-colors hover:border-[#7C8DFF]/30 hover:bg-primary/10 hover:text-white ${isSidebarOpen ? "h-10 w-full justify-between px-3 text-sm font-medium tracking-[0.035em]" : "size-10 justify-center"}`}
                 aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
                 aria-pressed={!isSidebarOpen}
                 title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
@@ -152,25 +141,25 @@ export function WorkspaceFrame({
             >
               {isSidebarOpen ? (
                 <div className="grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_2.5rem] items-center gap-3">
-                  <span className="relative grid size-11 shrink-0 place-items-center rounded-xl border border-[#7C8DFF]/15 bg-[#7C8DFF]/15 text-[0.95rem] font-semibold tracking-[0.02em] text-[#B6BEFF]">
+                  <span className="relative grid size-11 shrink-0 place-items-center rounded-xl border border-[#7C8DFF]/15 bg-primary/15 text-[0.95rem] font-semibold tracking-[0.02em] text-[#B6BEFF]">
                     {initials(displayName)}
                     <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[#141820] bg-[#58D6C7]" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 overflow-hidden">
-                    <p className="truncate text-base font-medium tracking-[0.025em] text-[#F5F7FA]" title={displayName}>{displayName}</p>
+                    <p className="truncate text-base font-medium tracking-[0.025em] text-foreground" title={displayName}>{displayName}</p>
                     <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.13em] text-[#A4ADBC]">{role}</p>
                   </div>
-                  <button type="button" onClick={signOut} disabled={isSigningOut} className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/[0.07] bg-black/10 text-[#AAB3C2] transition-colors hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white" aria-label="Sign out" title="Sign out">
+                  <button type="button" data-testid="sign-out-desktop" onClick={signOut} disabled={isSigningOut || isSignOutPending} className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/[0.07] bg-black/10 text-[#AAB3C2] transition-colors hover:border-white/[0.14] hover:bg-white/[0.08] hover:text-white" aria-label="Sign out" title="Sign out">
                     <LogOut className="size-4" aria-hidden="true" />
                   </button>
                 </div>
               ) : (
                 <div className="grid justify-items-center gap-2">
-                  <span className="relative grid size-10 place-items-center rounded-xl bg-[#7C8DFF]/15 text-sm font-semibold text-[#B6BEFF]">
+                  <span className="relative grid size-10 place-items-center rounded-xl bg-primary/15 text-sm font-semibold text-[#B6BEFF]">
                     {initials(displayName)}
                     <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[#141820] bg-[#58D6C7]" />
                   </span>
-                  <button type="button" onClick={signOut} disabled={isSigningOut} className="grid size-9 place-items-center rounded-xl text-[#AAB3C2] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Sign out" title="Sign out">
+                  <button type="button" data-testid="sign-out-desktop" onClick={signOut} disabled={isSigningOut || isSignOutPending} className="grid size-9 place-items-center rounded-xl text-[#AAB3C2] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Sign out" title="Sign out">
                     <LogOut className="size-4" />
                   </button>
                 </div>
@@ -191,7 +180,7 @@ export function WorkspaceFrame({
                 <Menu className="size-4" aria-hidden="true" />
                 <span className="hidden sm:inline">Menu</span>
               </button>
-              <NewCaseButton className="rounded-lg bg-[#7C8DFF] px-3 py-2 text-sm font-medium text-[#080A0F]">New</NewCaseButton>
+              <NewCaseButton className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-[#080A0F]">New</NewCaseButton>
             </div>
             <span className="ui-eyebrow hidden rounded-full border border-[#58D6C7]/20 bg-[#58D6C7]/[0.07] px-3 py-1.5 text-[#89EADD] sm:inline-flex">Encrypted session</span>
           </header>
@@ -199,37 +188,26 @@ export function WorkspaceFrame({
         </motion.section>
       </motion.div>
 
-      <AnimatePresence>
-        {isMobileSidebarOpen ? (
-          <>
-            <motion.button
-              type="button"
-              aria-label="Close sidebar"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="fixed inset-0 z-[60] bg-black/65 backdrop-blur-[3px] lg:hidden"
+      <Dialog.Root open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+        <Dialog.Portal>
+            <Dialog.Backdrop
+              className="fixed inset-0 z-[60] bg-black/65 backdrop-blur-[3px] transition-opacity duration-300 data-ending-style:opacity-0 data-starting-style:opacity-0 lg:hidden"
             />
-            <motion.aside
-              initial={{ x: "-105%", opacity: 0.7 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "-105%", opacity: 0.7 }}
-              transition={{ type: "spring", stiffness: 300, damping: 31 }}
-              className="fixed inset-y-0 left-0 z-[70] flex w-[min(21rem,calc(100vw-1rem))] flex-col overflow-hidden border-r border-white/[0.08] bg-[#10131A] p-4 shadow-[35px_0_90px_rgba(0,0,0,0.45)] lg:hidden"
-              aria-label="Mobile sidebar"
+            <Dialog.Popup
+              className="fixed inset-y-0 left-0 z-[70] flex w-[min(21rem,calc(100vw-1rem))] flex-col overflow-hidden border-r border-white/[0.08] bg-navigation p-4 shadow-[35px_0_90px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-300 ease-out data-ending-style:-translate-x-full data-ending-style:opacity-70 data-starting-style:-translate-x-full data-starting-style:opacity-70 lg:hidden"
+              aria-labelledby="mobile-navigation-title"
             >
               <div className="flex items-center justify-between gap-4 border-b border-white/[0.07] pb-4">
                 <Link href="/dashboard" onClick={() => setIsMobileSidebarOpen(false)} aria-label="Traceframe dashboard">
                   <BrandMark size="large" />
                 </Link>
-                <button type="button" onClick={() => setIsMobileSidebarOpen(false)} className="grid size-11 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-[#C9D0DA] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Close sidebar">
+                <Dialog.Close className="grid size-11 place-items-center rounded-xl border border-white/[0.08] bg-white/[0.035] text-[#C9D0DA] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Close sidebar">
                   <X className="size-5" aria-hidden="true" />
-                </button>
+                </Dialog.Close>
               </div>
 
               <div className="mt-7 flex-1">
-                <p className="ui-eyebrow mb-3 px-3 text-[#A4ADBC]">Workspace</p>
+                <Dialog.Title id="mobile-navigation-title" className="ui-eyebrow mb-3 px-3 text-[#A4ADBC]">Workspace navigation</Dialog.Title>
                 <div onClickCapture={(event) => {
                   const interactiveTarget = (event.target as HTMLElement).closest("a, button");
                   if (interactiveTarget) setIsMobileSidebarOpen(false);
@@ -239,22 +217,27 @@ export function WorkspaceFrame({
               </div>
 
               <div className="grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center gap-3 rounded-2xl border border-white/[0.07] bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-3">
-                <span className="relative grid size-11 place-items-center rounded-xl border border-[#7C8DFF]/15 bg-[#7C8DFF]/15 text-sm font-semibold text-[#B6BEFF]">
+                <span className="relative grid size-11 place-items-center rounded-xl border border-[#7C8DFF]/15 bg-primary/15 text-sm font-semibold text-[#B6BEFF]">
                   {initials(displayName)}
                   <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[#141820] bg-[#58D6C7]" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-base font-medium text-[#F5F7FA]">{displayName}</p>
+                  <p className="truncate text-base font-medium text-foreground">{displayName}</p>
                   <p className="mt-1 truncate text-xs font-medium uppercase tracking-[0.13em] text-[#A4ADBC]">{role}</p>
                 </div>
-                <button type="button" onClick={signOut} disabled={isSigningOut} className="grid size-11 place-items-center rounded-xl border border-white/[0.07] text-[#B5BECA] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Sign out">
+                <button type="button" data-testid="sign-out-mobile" onClick={signOut} disabled={isSigningOut || isSignOutPending} className="grid size-11 place-items-center rounded-xl border border-white/[0.07] text-[#B5BECA] transition-colors hover:bg-white/[0.08] hover:text-white" aria-label="Sign out">
                   <LogOut className="size-4" aria-hidden="true" />
                 </button>
               </div>
-            </motion.aside>
-          </>
-        ) : null}
-      </AnimatePresence>
+            </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {signOutError ? (
+        <div role="alert" className="fixed bottom-5 left-1/2 z-[90] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-red-300/20 bg-[#171016]/95 px-5 py-4 text-center text-sm text-red-100 shadow-2xl">
+          {signOutError}
+        </div>
+      ) : null}
 
       <AnimatePresence>
         {scrollNavigation.isScrollable ? (
@@ -284,7 +267,7 @@ export function WorkspaceFrame({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-[#080A0F]/95 backdrop-blur-xl"
+            className="fixed inset-0 z-[100] grid place-items-center overflow-hidden bg-background/95 backdrop-blur-xl"
           >
             <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 220, damping: 22 }} className="relative grid justify-items-center">
               <motion.span animate={reduceMotion ? {} : { rotate: [0, -8, 8, 0], scale: [1, 1.08, 1] }} transition={{ duration: 0.7 }} className="grid size-20 place-items-center rounded-[1.6rem] border border-[#58D6C7]/20 bg-[#58D6C7]/10 text-[#79E5D8] shadow-[0_0_70px_rgba(88,214,199,0.15)]">
