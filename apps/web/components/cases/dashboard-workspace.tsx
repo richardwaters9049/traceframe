@@ -23,7 +23,7 @@ export function DashboardWorkspace({ initialPage, verification }: { initialPage:
         initial="hidden"
         animate="visible"
         variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1, delayChildren: 0.12 } } }}
-        className="grid min-h-[calc(var(--workspace-height)-4rem)] min-w-0 grid-rows-[auto_1fr] gap-5 px-5 py-6 sm:px-7 lg:px-8 lg:py-7"
+        className="grid min-h-[calc(var(--workspace-height)-4rem)] min-w-0 grid-rows-[auto_1fr] gap-5 px-5 py-6 sm:px-7 lg:h-[calc(var(--workspace-height)-4rem)] lg:py-7"
       >
         <motion.header variants={{ hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0 } }} transition={{ duration: 0.45, ease: "easeOut" }} className="grid min-w-0 gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="min-w-0">
@@ -44,7 +44,7 @@ export function DashboardWorkspace({ initialPage, verification }: { initialPage:
           </button>
         </motion.header>
 
-        <motion.div variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }} transition={{ duration: 0.5, ease: "easeOut" }} className="grid min-h-0 min-w-0 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <motion.div variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }} transition={{ duration: 0.5, ease: "easeOut" }} className="grid min-h-0 min-w-0 items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:overflow-hidden">
           <CaseRegister initialPage={initialPage} />
 
           <aside className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-3 lg:grid-cols-1 lg:grid-rows-3">

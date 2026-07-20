@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const casePriorities = ["standard", "high", "critical"] as const;
+export const CASE_REGISTER_PAGE_SIZE = 5;
 
 export const createCaseSchema = z.object({
   title: z

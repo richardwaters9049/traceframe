@@ -107,12 +107,16 @@ the private Compose network.
 - Bun for running frontend checks outside Docker.
 - Python 3.14 for developing the worker outside Docker.
 
-Copy the local environment defaults and start the complete stack:
+Start the complete stack with the Traceframe terminal launcher:
 
 ```sh
-cp .env.example .env
-make up
+./run.sh
 ```
+
+The launcher checks Docker, creates `.env` from `.env.example` when needed,
+builds the service images, applies migrations, waits for every long-running
+service to become healthy, and prints clickable local links. For a faster
+restart using existing images, run `./run.sh --no-build`.
 
 Open <http://127.0.0.1:3000> and sign in with the local synthetic account:
 
@@ -248,6 +252,7 @@ traceframe/
 ├── db/                    Local demo-user seed
 ├── docs/                  Architecture, brand, and dated debt records
 ├── services/worker/       Python background-processing service
+├── run.sh                 Interactive local project launcher
 ├── compose.yaml           Container topology and health checks
 ├── Makefile               Common build, test, and lifecycle commands
 └── AGENTS.md              Project guidance for coding agents

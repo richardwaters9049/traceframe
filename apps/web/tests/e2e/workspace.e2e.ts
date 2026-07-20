@@ -38,6 +38,7 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
 
   const caseRows = page.getByTestId("case-row");
   const caseRowCount = await caseRows.count();
+  expect(caseRowCount).toBeLessThanOrEqual(5);
   if (caseRowCount > 0) {
     await caseRows.nth(0).click();
     await expect(page.getByRole("heading", { name: "Analysis workspace" })).toBeVisible();
