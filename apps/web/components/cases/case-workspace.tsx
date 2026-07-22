@@ -15,7 +15,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
 
   return (
     <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
-      <button type="button" onClick={showDashboard} className="ui-label inline-flex items-center gap-2 rounded-xl border border-white/[0.09] bg-white/[0.04] px-3.5 py-2 text-[#D2D7E0] hover:bg-white/[0.075]"><ArrowLeft className="size-4" />Back to dashboard</button>
+      <button type="button" onClick={showDashboard} className="ui-label inline-flex items-center gap-2 rounded-xl border border-white/[0.09] bg-primary px-3.5 py-2 text-background hover:bg-primary-hover hover:text-white"><ArrowLeft className="size-4" />Back to dashboard</button>
       <div className="mt-7 flex flex-col justify-between gap-6 xl:flex-row xl:items-start">
         <div className="max-w-3xl"><div className="ui-eyebrow flex items-center gap-2"><span className="rounded-full bg-[#58D6C7]/[0.08] px-2.5 py-1 text-[#72DFD2] ring-1 ring-inset ring-[#58D6C7]/15">{record.status}</span><span className="rounded-full bg-white/[0.045] px-2.5 py-1 text-[#B3BBC8] ring-1 ring-inset ring-white/[0.07]">{record.priority}</span></div><h1 className="ui-page-title mt-4 text-balance">{record.title}</h1><p className="ui-body mt-4 max-w-2xl whitespace-pre-wrap text-[#B4BDCA]">{record.summary || "No initial context was recorded for this case."}</p></div>
         <span className="ui-meta inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-[#AEB7C5]"><Clock3 className="size-4 text-[#8594FF]" />{createdAt}</span>

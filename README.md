@@ -114,9 +114,14 @@ Start the complete stack with the Traceframe terminal launcher:
 ```
 
 The launcher checks Docker, creates `.env` from `.env.example` when needed,
-builds the service images, applies migrations, waits for every long-running
-service to become healthy, and prints clickable local links. For a faster
-restart using existing images, run `./run.sh --no-build`.
+applies migrations, waits for every long-running service to become healthy, and
+prints clickable local links. The web service runs `next dev` inside Docker with
+`apps/web` mounted into the container, so saved TypeScript, React, and CSS changes
+use Fast Refresh without rebuilding or recreating the container.
+
+For a faster restart using existing development images, run
+`./run.sh --no-build`. To exercise the standalone production build instead, run
+`./run.sh --production`.
 
 Open <http://127.0.0.1:3000> and sign in with the local synthetic account:
 
@@ -143,17 +148,19 @@ make down
 
 ## Local development
 
-Install and run the web application with Bun:
+The normal `./run.sh` workflow already provides containerised Fast Refresh. View
+the development server output when diagnosing a compilation or reload issue:
 
 ```sh
-cd apps/web
-bun install
-bun dev
+make logs
 ```
 
-The containerised database must be reachable for authentication, dashboard
-rendering, and case operations. The simplest development setup is to start the
-Compose stack first and then run the frontend checks locally.
+Dependencies and Next.js build output use Docker-managed `web_node_modules` and
+`web_next_cache` volumes. This avoids mixing macOS dependencies with the Linux
+container. If `package.json` or `bun.lock` changes, restart with `./run.sh` so
+the container runs the frozen Bun install before starting the development
+server. Docker-based file watching can be slower on macOS than host-native
+development, so the override enables polling for reliable change detection.
 
 Create a Python virtual environment before installing worker dependencies:
 
@@ -254,6 +261,7 @@ traceframe/
 ├── services/worker/       Python background-processing service
 ├── run.sh                 Interactive local project launcher
 ├── compose.yaml           Container topology and health checks
+├── compose.dev.yaml       Bind-mounted web development and Fast Refresh
 ├── Makefile               Common build, test, and lifecycle commands
 └── AGENTS.md              Project guidance for coding agents
 ```

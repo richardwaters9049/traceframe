@@ -4,9 +4,11 @@ set -euo pipefail
 
 PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 COMPOSE_FILE="$PROJECT_DIR/compose.yaml"
+DEV_COMPOSE_FILE="$PROJECT_DIR/compose.dev.yaml"
 HEALTH_URL="http://127.0.0.1:3000/api/health"
 APP_URL="http://127.0.0.1:3000"
 NO_BUILD=0
+PRODUCTION=0
 
 TERMINAL_WIDTH="${COLUMNS:-}"
 if [[ ! "$TERMINAL_WIDTH" =~ ^[0-9]+$ ]] && command -v tput >/dev/null 2>&1; then
@@ -136,7 +138,11 @@ run_with_spinner() {
 }
 
 compose() {
-  docker compose --project-directory "$PROJECT_DIR" -f "$COMPOSE_FILE" "$@"
+  if (( PRODUCTION == 1 )); then
+    docker compose --project-directory "$PROJECT_DIR" -f "$COMPOSE_FILE" "$@"
+  else
+    docker compose --project-directory "$PROJECT_DIR" -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" "$@"
+  fi
 }
 
 start_environment() {
@@ -153,13 +159,15 @@ check_health() {
 
 usage() {
   cat <<'EOF'
-Usage: ./run.sh [--no-build]
+Usage: ./run.sh [--no-build] [--production]
 
 Start the complete local Traceframe environment and wait for it to become
-healthy. By default, service images are rebuilt before startup.
+healthy. By default, the web service runs in development mode with Fast Refresh
+and the source directory mounted into its container.
 
 Options:
   --no-build  Start existing service images without rebuilding them.
+  --production  Run the production-style standalone Next.js image.
   -h, --help  Show this help.
 EOF
 }
@@ -168,6 +176,10 @@ while (( $# > 0 )); do
   case "$1" in
     --no-build)
       NO_BUILD=1
+      shift
+      ;;
+    --production)
+      PRODUCTION=1
       shift
       ;;
     -h|--help)
@@ -189,6 +201,11 @@ printf '\n'
 
 if [[ ! -r "$COMPOSE_FILE" ]]; then
   ui_error "Compose configuration not found: $COMPOSE_FILE"
+  exit 1
+fi
+
+if (( PRODUCTION == 0 )) && [[ ! -r "$DEV_COMPOSE_FILE" ]]; then
+  ui_error "Development Compose configuration not found: $DEV_COMPOSE_FILE"
   exit 1
 fi
 
@@ -216,10 +233,14 @@ if [[ ! -f "$PROJECT_DIR/.env" ]]; then
   ui_info 'Created .env from the local development template.'
 fi
 
-if (( NO_BUILD == 1 )); then
-  ui_info 'Starting the existing Traceframe service images.'
+if (( PRODUCTION == 1 )) && (( NO_BUILD == 1 )); then
+  ui_info 'Starting the existing production-style Traceframe images.'
+elif (( PRODUCTION == 1 )); then
+  ui_info 'Building and starting the production-style Traceframe environment.'
+elif (( NO_BUILD == 1 )); then
+  ui_info 'Starting Traceframe development mode with Fast Refresh.'
 else
-  ui_info 'Building and starting the complete Traceframe environment.'
+  ui_info 'Building Traceframe development mode with Fast Refresh.'
 fi
 
 run_with_spinner 'Starting services and applying migrations' start_environment
@@ -236,5 +257,8 @@ printf '   MinIO        '
 terminal_link 'Open local object storage' 'http://127.0.0.1:9001'
 printf '\n\n'
 ui_info 'Sign in with the synthetic demo credentials documented in README.md or configured in .env.'
+if (( PRODUCTION == 0 )); then
+  ui_success 'Fast Refresh is active. Changes under apps/web update without recreating the container.'
+fi
 ui_warning 'When finished, stop the environment without deleting its data: make down'
 printf '\n'

@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
 import { can } from "@/lib/auth/authorization";
 import { createCaseSchema } from "@/lib/cases/contracts";
-import { createCase, listCasePage } from "@/lib/cases/repository";
+import { createCase, listCasePage, type CasePageDirection } from "@/lib/cases/repository";
 import { getRequestId, isSameOriginRequest, jsonResponse, requestLog } from "@/lib/http/security";
 
 export async function GET(request: Request) {
@@ -18,7 +18,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = Number(url.searchParams.get("limit") ?? 20);
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) return jsonResponse({ error: "Invalid page size." }, 400, requestId);
-    const page = await listCasePage(url.searchParams.get("cursor"), limit);
+    const direction = url.searchParams.get("direction") ?? "next";
+    if (!["next", "previous", "last"].includes(direction)) return jsonResponse({ error: "Invalid pagination direction." }, 400, requestId);
+    const page = await listCasePage(url.searchParams.get("cursor"), limit, direction as CasePageDirection);
     return jsonResponse(page, 200, requestId);
   } catch (error) {
     if (error instanceof Error && error.message === "INVALID_CURSOR") return jsonResponse({ error: "Invalid pagination cursor." }, 400, requestId);

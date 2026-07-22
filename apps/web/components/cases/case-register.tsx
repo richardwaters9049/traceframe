@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, FolderOpen } from "lucide-react";
+import { ArrowUpRight, ChevronsLeft, ChevronsRight, FolderOpen } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
@@ -8,7 +8,6 @@ import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -25,7 +24,7 @@ const priorityStyles: Record<string, string> = {
 
 export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
   const { openCase } = useWorkspaceUI();
-  const [pages, setPages] = useState([initialPage]);
+  const [pages, setPages] = useState<Record<number, CaseCursorPage>>({ 0: initialPage });
   const [pageIndex, setPageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,10 +33,28 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
   const firstRecord = pageIndex * CASE_REGISTER_PAGE_SIZE + 1;
   const lastRecord = Math.min(firstRecord + page.cases.length - 1, initialPage.totalCount);
 
-  function showPreviousPage() {
+  async function showPreviousPage() {
     if (pageIndex === 0 || isLoading) return;
+    const targetPageIndex = pageIndex - 1;
+    if (pages[targetPageIndex]) {
+      setError(null);
+      setPageIndex(targetPageIndex);
+      return;
+    }
+    if (!page.previousCursor) return;
+
+    setIsLoading(true);
     setError(null);
-    setPageIndex((current) => current - 1);
+    const result = await apiRequest<CaseCursorPage>(
+      `/api/cases?limit=${CASE_REGISTER_PAGE_SIZE}&direction=previous&cursor=${encodeURIComponent(page.previousCursor)}`,
+    );
+    if (result.ok) {
+      setPages((current) => ({ ...current, [targetPageIndex]: result.data }));
+      setPageIndex(targetPageIndex);
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
   }
 
   async function showNextPage() {
@@ -55,8 +72,9 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
       `/api/cases?limit=${CASE_REGISTER_PAGE_SIZE}&cursor=${encodeURIComponent(page.nextCursor)}`,
     );
     if (result.ok) {
-      setPages((current) => [...current, result.data]);
-      setPageIndex((current) => current + 1);
+      const targetPageIndex = pageIndex + 1;
+      setPages((current) => ({ ...current, [targetPageIndex]: result.data }));
+      setPageIndex(targetPageIndex);
     } else {
       setError(result.error);
     }
@@ -69,8 +87,35 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
     setPageIndex(targetPageIndex);
   }
 
+  function showFirstPage() {
+    showLoadedPage(0);
+  }
+
+  async function showLastPage() {
+    const targetPageIndex = totalPages - 1;
+    if (pageIndex === targetPageIndex || isLoading) return;
+    if (pages[targetPageIndex]) {
+      setError(null);
+      setPageIndex(targetPageIndex);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    const result = await apiRequest<CaseCursorPage>(
+      `/api/cases?limit=${CASE_REGISTER_PAGE_SIZE}&direction=last`,
+    );
+    if (result.ok) {
+      setPages((current) => ({ ...current, [targetPageIndex]: result.data }));
+      setPageIndex(targetPageIndex);
+    } else {
+      setError(result.error);
+    }
+    setIsLoading(false);
+  }
+
   const hasPreviousPage = pageIndex > 0;
-  const hasNextPage = Boolean(pages[pageIndex + 1] || page.nextCursor);
+  const hasNextPage = pageIndex < totalPages - 1;
 
   return (
     <motion.section
@@ -156,6 +201,24 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
             <Pagination className="col-start-2" aria-label="Case register pages">
               <PaginationContent className="gap-1">
                 <PaginationItem>
+                  <PaginationLink
+                    href="#active-register"
+                    size="default"
+                    aria-label="Go to first page"
+                    title="First page"
+                    aria-disabled={!hasPreviousPage || isLoading}
+                    tabIndex={!hasPreviousPage || isLoading ? -1 : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      showFirstPage();
+                    }}
+                    className={`h-9 gap-1 rounded-xl border border-transparent px-2 text-[#AAB3C2] hover:border-white/[0.09] hover:bg-white/[0.06] hover:text-white ${!hasPreviousPage || isLoading ? "pointer-events-none opacity-35" : ""}`}
+                  >
+                    <ChevronsLeft className="size-4" aria-hidden="true" />
+                    <span className="hidden xl:inline">First</span>
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
                   <PaginationPrevious
                     href="#active-register"
                     text="Previous"
@@ -163,39 +226,20 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                     tabIndex={!hasPreviousPage || isLoading ? -1 : undefined}
                     onClick={(event) => {
                       event.preventDefault();
-                      showPreviousPage();
+                      void showPreviousPage();
                     }}
                     className={`h-9 rounded-xl border border-transparent px-2.5 text-[#AAB3C2] hover:border-white/[0.09] hover:bg-white/[0.06] hover:text-white ${!hasPreviousPage || isLoading ? "pointer-events-none opacity-35" : ""}`}
                   />
                 </PaginationItem>
 
-                {pageIndex > 1 ? (
-                  <>
-                    <PaginationItem className="hidden sm:block">
-                      <PaginationLink
-                        href="#active-register"
-                        aria-label="Go to page 1"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          showLoadedPage(0);
-                        }}
-                        className="size-9 rounded-xl border-transparent text-[#AAB3C2] hover:bg-white/[0.06] hover:text-white"
-                      >
-                        1
-                      </PaginationLink>
-                    </PaginationItem>
-                    {pageIndex > 2 ? <PaginationItem className="hidden sm:block"><PaginationEllipsis className="text-[#727D90]" /></PaginationItem> : null}
-                  </>
-                ) : null}
-
                 {hasPreviousPage ? (
-                  <PaginationItem className="hidden sm:block">
+                  <PaginationItem className="hidden lg:block">
                     <PaginationLink
                       href="#active-register"
                       aria-label={`Go to page ${pageIndex}`}
                       onClick={(event) => {
                         event.preventDefault();
-                        showLoadedPage(pageIndex - 1);
+                        void showPreviousPage();
                       }}
                       className="size-9 rounded-xl border-transparent text-[#AAB3C2] hover:bg-white/[0.06] hover:text-white"
                     >
@@ -217,7 +261,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                 </PaginationItem>
 
                 {hasNextPage ? (
-                  <PaginationItem className="hidden sm:block">
+                  <PaginationItem className="hidden lg:block">
                     <PaginationLink
                       href="#active-register"
                       aria-label={`Go to page ${pageIndex + 2}`}
@@ -232,12 +276,11 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                   </PaginationItem>
                 ) : null}
 
-                {pageIndex + 2 < totalPages ? <PaginationItem className="hidden sm:block"><PaginationEllipsis className="text-[#727D90]" /></PaginationItem> : null}
-
                 <PaginationItem>
                   <PaginationNext
                     href="#active-register"
-                    text={isLoading ? "Loading" : "Next"}
+                    text="Next"
+                    aria-busy={isLoading}
                     aria-disabled={!hasNextPage || isLoading}
                     tabIndex={!hasNextPage || isLoading ? -1 : undefined}
                     onClick={(event) => {
@@ -246,6 +289,24 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                     }}
                     className={`h-9 rounded-xl border border-transparent px-2.5 text-[#AAB3C2] hover:border-white/[0.09] hover:bg-white/[0.06] hover:text-white ${!hasNextPage || isLoading ? "pointer-events-none opacity-35" : ""}`}
                   />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink
+                    href="#active-register"
+                    size="default"
+                    aria-label="Go to last page"
+                    title="Last page"
+                    aria-disabled={!hasNextPage || isLoading}
+                    tabIndex={!hasNextPage || isLoading ? -1 : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      void showLastPage();
+                    }}
+                    className={`h-9 gap-1 rounded-xl border border-transparent px-2 text-[#AAB3C2] hover:border-white/[0.09] hover:bg-white/[0.06] hover:text-white ${!hasNextPage || isLoading ? "pointer-events-none opacity-35" : ""}`}
+                  >
+                    <span className="hidden xl:inline">Last</span>
+                    <ChevronsRight className="size-4" aria-hidden="true" />
+                  </PaginationLink>
                 </PaginationItem>
               </PaginationContent>
             </Pagination>

@@ -7,6 +7,7 @@ import { getDatabaseClient } from "@/lib/db/client";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
+export type CasePageDirection = "next" | "previous" | "last";
 
 type CaseRow = {
   id: string; title: string; summary: string; status: string; priority: string;
@@ -79,24 +80,57 @@ export async function createCase(input: CreateCaseInput, actorId: string): Promi
   });
 }
 
-export async function listCasePage(cursorValue?: string | null, requestedLimit = DEFAULT_PAGE_SIZE): Promise<CaseCursorPage> {
+export async function listCasePage(
+  cursorValue?: string | null,
+  requestedLimit = DEFAULT_PAGE_SIZE,
+  direction: CasePageDirection = "next",
+): Promise<CaseCursorPage> {
   const sql = getDatabaseClient();
   const limit = Math.min(Math.max(1, requestedLimit), MAX_PAGE_SIZE);
   const cursor = cursorValue ? decodeCaseCursor(cursorValue) : null;
   if (cursorValue && !cursor) throw new Error("INVALID_CURSOR");
-  const rows = cursor
-    ? await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
-        WHERE (created_at, id) < (${cursor.createdAt}, ${cursor.id}) ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}`
-    : await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
-        ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}`;
+  if (direction === "previous" && !cursor) throw new Error("INVALID_CURSOR");
+  if (direction === "last" && cursor) throw new Error("INVALID_CURSOR");
+
   const [{ count, urgent_count: urgentCount }] = await sql<{ count: string; urgent_count: string }[]>`
     SELECT count(*)::text AS count,
       count(*) FILTER (WHERE priority IN ('high', 'critical'))::text AS urgent_count
     FROM cases`;
-  const hasMore = rows.length > limit;
-  const cases = rows.slice(0, limit).map(serialiseCase);
-  return { cases, totalCount: Number(count), urgentCount: Number(urgentCount),
-    nextCursor: hasMore ? encodeCaseCursor(cases[cases.length - 1]) : null };
+  const totalCount = Number(count);
+
+  let cases: CaseRecord[];
+  let previousCursor: string | null = null;
+  let nextCursor: string | null = null;
+
+  if (direction === "last") {
+    const lastPageSize = totalCount === 0 ? 0 : totalCount % limit || Math.min(limit, totalCount);
+    const rows = lastPageSize
+      ? await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
+          ORDER BY created_at ASC, id ASC LIMIT ${lastPageSize}`
+      : [];
+    cases = rows.reverse().map(serialiseCase);
+    previousCursor = totalCount > cases.length && cases.length ? encodeCaseCursor(cases[0]) : null;
+  } else if (direction === "previous" && cursor) {
+    const rows = await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
+      WHERE (created_at, id) > (${cursor.createdAt}, ${cursor.id})
+      ORDER BY created_at ASC, id ASC LIMIT ${limit + 1}`;
+    const hasMoreNewer = rows.length > limit;
+    cases = rows.slice(0, limit).reverse().map(serialiseCase);
+    previousCursor = hasMoreNewer && cases.length ? encodeCaseCursor(cases[0]) : null;
+    nextCursor = cases.length ? encodeCaseCursor(cases[cases.length - 1]) : null;
+  } else {
+    const rows = cursor
+      ? await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
+          WHERE (created_at, id) < (${cursor.createdAt}, ${cursor.id}) ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}`
+      : await sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases
+          ORDER BY created_at DESC, id DESC LIMIT ${limit + 1}`;
+    const hasMoreOlder = rows.length > limit;
+    cases = rows.slice(0, limit).map(serialiseCase);
+    previousCursor = cursor && cases.length ? encodeCaseCursor(cases[0]) : null;
+    nextCursor = hasMoreOlder && cases.length ? encodeCaseCursor(cases[cases.length - 1]) : null;
+  }
+
+  return { cases, previousCursor, nextCursor, totalCount, urgentCount: Number(urgentCount) };
 }
 
 export async function verifyGlobalAuditLedger(): Promise<AuditVerification> {

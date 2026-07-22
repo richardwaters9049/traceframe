@@ -181,9 +181,12 @@ make down
 `make bootstrap` checks Bun, Python, and Docker, creates `.env` if needed,
 installs frozen Bun dependencies, and prepares the worker virtual environment.
 `./run.sh` is the primary interactive launcher: it checks Docker, creates the
-local `.env` when absent, builds the Compose services, applies migrations, waits
-for health, and prints clickable application links. Use `./run.sh --no-build`
-only when existing service images are known to be current.
+local `.env` when absent, applies migrations, waits for health, and prints
+clickable application links. By default it combines `compose.yaml` with
+`compose.dev.yaml`, bind-mounts `apps/web`, and runs Next.js development mode for
+Fast Refresh without container recreation. Use `./run.sh --no-build` only when
+existing development images are current. Use `./run.sh --production` when a
+production-style standalone image is specifically required.
 `make test` runs the web and worker checks. `make test-integration` rebuilds the
 Compose environment and runs the Playwright API, browser, accessibility, and
 reflow suite across Chromium, Firefox, WebKit, and a narrow mobile project.
@@ -193,6 +196,12 @@ edit an applied migration. Add a new forward migration and keep
 `scripts/run-migrations.sh` compatible with fresh and existing volumes. Rollback
 is a pre-upgrade PostgreSQL restore or a reviewed corrective forward migration,
 not an automatic destructive down-migration.
+
+Keep host source and container dependencies separate in the development stack:
+`apps/web` is bind-mounted, while `/app/node_modules` and `/app/.next` use named
+Docker volumes. Do not mount host `node_modules` into the container. A dependency
+or lockfile change requires rerunning `./run.sh`; ordinary TypeScript, React, and
+CSS edits must update through Fast Refresh without rebuilding the web image.
 
 Do not delete Compose volumes unless the user explicitly requests a data reset.
 Do not overwrite unrelated or uncommitted user changes.

@@ -25,9 +25,25 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(pageResponse.status()).toBe(200);
   const responseText = await pageResponse.text();
   expect(responseText.length).toBeLessThan(10_000);
-  const casePage = JSON.parse(responseText) as { cases: unknown[]; nextCursor: string | null };
+  const casePage = JSON.parse(responseText) as { cases: unknown[]; previousCursor: string | null; nextCursor: string | null };
   expect(casePage.cases).toHaveLength(2);
+  expect(casePage.previousCursor).toBeNull();
   expect(casePage.nextCursor).toBeTruthy();
+
+  const lastPageResponse = await request.get("/api/cases?limit=5&direction=last");
+  expect(lastPageResponse.status()).toBe(200);
+  const lastPage = await lastPageResponse.json() as { cases: unknown[]; previousCursor: string | null; nextCursor: string | null; totalCount: number };
+  expect(lastPage.cases).toHaveLength(lastPage.totalCount % 5 || Math.min(5, lastPage.totalCount));
+  expect(lastPage.previousCursor).toBeTruthy();
+  expect(lastPage.nextCursor).toBeNull();
+
+  const previousPageResponse = await request.get(
+    `/api/cases?limit=5&direction=previous&cursor=${encodeURIComponent(lastPage.previousCursor ?? "")}`,
+  );
+  expect(previousPageResponse.status()).toBe(200);
+  const previousPage = await previousPageResponse.json() as { cases: unknown[]; nextCursor: string | null };
+  expect(previousPage.cases).toHaveLength(5);
+  expect(previousPage.nextCursor).toBeTruthy();
 
   const dashboardResponse = await request.get("/dashboard");
   expect(dashboardResponse.status()).toBe(200);

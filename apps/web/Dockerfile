@@ -4,6 +4,13 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
+FROM dependencies AS development
+
+ENV NODE_ENV=development \
+    NEXT_TELEMETRY_DISABLED=1
+
+EXPOSE 3000
+
 FROM oven/bun:1.3.14-alpine AS builder
 
 WORKDIR /app
@@ -28,4 +35,3 @@ USER bun
 EXPOSE 3000
 
 CMD ["bun", "server.js"]
-

@@ -44,6 +44,7 @@ export type AuditEventRecord = {
 
 export type CaseCursorPage = {
   cases: CaseRecord[];
+  previousCursor: string | null;
   nextCursor: string | null;
   totalCount: number;
   urgentCount: number;

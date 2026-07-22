@@ -16,6 +16,17 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
   const dashboardResults = await new AxeBuilder({ page }).analyze();
   expect(dashboardResults.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
 
+  const firstPageControl = page.getByRole("button", { name: "Go to first page", exact: true });
+  const lastPageControl = page.getByRole("button", { name: "Go to last page", exact: true });
+  await expect(firstPageControl).toBeVisible();
+  await expect(lastPageControl).toBeVisible();
+  if (await lastPageControl.getAttribute("aria-disabled") !== "true") {
+    await lastPageControl.click();
+    await expect(lastPageControl).toHaveAttribute("aria-disabled", "true");
+    await firstPageControl.click();
+    await expect(firstPageControl).toHaveAttribute("aria-disabled", "true");
+  }
+
   if (testInfo.project.name.startsWith("mobile")) {
     await page.getByRole("button", { name: "Open sidebar" }).click();
     await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toBeVisible();
