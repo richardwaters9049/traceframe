@@ -94,6 +94,7 @@ Legacy case and architecture URLs redirect safely back to `/dashboard`.
 | Object storage | MinIO |
 | Background processing | Python 3.14, psycopg, Pydantic Settings |
 | Local orchestration | Docker Compose |
+| Production hosting | Render Blueprint, managed PostgreSQL, private MinIO |
 
 Next.js owns both the browser interface and its same-origin HTTP boundary.
 There is no separate browser-facing Python API and no CORS dependency in the
@@ -299,9 +300,31 @@ curl -fsS http://127.0.0.1:3000/api/health
   are ignored.
 - The project contains synthetic information only.
 
-Production deployment would additionally require HTTPS with
-`AUTH_COOKIE_SECURE=true`, external secret management, deployment-specific
-network controls, monitoring, backups, and a formal threat review.
+A live production deployment still requires the Blueprint to be provisioned,
+its Render-only secret to be supplied, backups and monitoring to be enabled,
+and a formal threat review to be completed. The committed production definition
+enables HTTPS-only cookies, private service networking, and external secret
+management by default.
+
+## CI/CD and production
+
+GitHub Actions is the required release gate. Pull requests into protected
+`main` run linting, unit tests, dependency audits, production image builds, and
+the container-backed Playwright suite. Render then deploys only a checked
+`main` commit using the repository's `render.yaml` Blueprint.
+
+The production definition includes the public Next.js service, a private Python
+worker, managed PostgreSQL, and private disk-backed MinIO. Provisioning creates
+paid resources and requires one Render-only `AUTH_DEMO_PASSWORD` secret, so it
+is intentionally performed as a reviewed account operation after the files are
+merged. See the [deployment runbook](docs/DEPLOYMENT.md) for topology, cost,
+first deployment, smoke checks, backups, and rollback.
+
+Traceframe uses protected-main trunk-based development instead of long-lived
+development, test, and production branches. Short-lived branches represent
+work; GitHub Actions represents test; Render represents production. See the
+[branching and release workflow](docs/BRANCHING.md) for the exact practice and
+recommended GitHub ruleset.
 
 ## Repository structure
 
@@ -309,11 +332,13 @@ network controls, monitoring, backups, and a formal threat review.
 traceframe/
 ├── apps/web/              Next.js application, Route Handlers, UI, and tests
 ├── db/                    Local demo-user seed
+├── deploy/render/         Production Docker definitions
 ├── docs/                  Architecture, brand, and dated debt records
 ├── services/worker/       Python background-processing service
 ├── run.sh                 Interactive local project launcher
 ├── compose.yaml           Container topology and health checks
 ├── compose.dev.yaml       Bind-mounted web development and Fast Refresh
+├── render.yaml            Render production infrastructure definition
 ├── Makefile               Common build, test, and lifecycle commands
 └── AGENTS.md              Project guidance for coding agents
 ```
@@ -321,6 +346,8 @@ traceframe/
 Further detail is available in:
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Branching and releases](docs/BRANCHING.md)
+- [Production deployment](docs/DEPLOYMENT.md)
 - [Brand system](docs/BRAND.md)
 - [Technical debt review — 19/07/2026](docs/tech_debt/19-07-2026.md)
 - [Technical debt resolution — 20/07/2026](docs/tech_debt/20-07-2026.md)

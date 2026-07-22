@@ -31,6 +31,9 @@ project and the role it supports.
 - Local orchestration: Docker Compose. The web app, worker, database, and MinIO
   must continue to run as containers. The one-shot `migrate` service must finish
   successfully before seed, web, and worker startup.
+- Production orchestration: Render Blueprint. Only the Next.js service is
+  public; the worker and MinIO remain private, and managed PostgreSQL has no
+  public allow-list. Do not add secrets to `render.yaml` or committed files.
 
 Next.js owns the UI and its same-origin HTTP boundary, so normal browser flows
 do not require CORS. Authentication, authorisation, validation, and safe data
@@ -92,6 +95,10 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
 - SHA-256 observations represent isolated 64-character hexadecimal values found
   in normalised source text. Keep strict boundaries and lowercase normalisation;
   do not classify partial or longer hexadecimal strings as hashes.
+- Production infrastructure is defined in `render.yaml`. GitHub Actions is the
+  release gate and Render deploys checked `main` commits. Provisioned runtime
+  state, backups, alerts, and restore drills must not be claimed from the
+  infrastructure definition alone.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
 parsers, additional observation types, source retention controls, and
@@ -228,6 +235,13 @@ edit an applied migration. Add a new forward migration and keep
 is a pre-upgrade PostgreSQL restore or a reviewed corrective forward migration,
 not an automatic destructive down-migration.
 
+Use the protected-main workflow in `docs/BRANCHING.md`: short-lived branches,
+pull-request CI, squash merges, and Render production deployment from `main`.
+Do not create long-lived `development`, `test`, or `production` branches unless
+the release model has a documented need for a separate persistent environment.
+Changes to GitHub rulesets or paid Render resources require explicit user
+approval because they alter external project state.
+
 Keep host source and container dependencies separate in the development stack:
 `apps/web` is bind-mounted, while `/app/node_modules` and `/app/.next` use named
 Docker volumes. Do not mount host `node_modules` into the container. A dependency
@@ -282,6 +296,8 @@ runtime verification that was not performed.
 - Update `docs/BRAND.md` when tokens, typography, identity, or interaction rules
   change.
 - Keep `README.md` accurate for setup, services, and the main workflow.
+- Keep `docs/DEPLOYMENT.md` and `docs/BRANCHING.md` accurate when production
+  topology, release gates, rollback, or branch policy changes.
 - Preserve dated technical-debt history under `docs/tech_debt`. Add a new dated
   record for a future review rather than rewriting the 19/07/2026 assessment or
   20/07/2026 resolution report.

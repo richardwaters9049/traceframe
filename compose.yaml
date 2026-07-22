@@ -69,20 +69,16 @@ services:
     image: postgres:18-alpine
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
-    command:
-      - sh
-      - -c
-      - >-
-        psql
-        --host=db
-        --username=${POSTGRES_USER:-traceframe}
-        --dbname=${POSTGRES_DB:-traceframe}
-        --set=email="${AUTH_DEMO_EMAIL:-analyst@traceframe.local}"
-        --set=display_name="${AUTH_DEMO_NAME:-Morgan Reed}"
-        --set=password="${AUTH_DEMO_PASSWORD:-Traceframe!2026}"
-        --file=/seed/seed-demo-user.sql
+      PGHOST: db
+      PGDATABASE: ${POSTGRES_DB:-traceframe}
+      PGUSER: ${POSTGRES_USER:-traceframe}
+      AUTH_DEMO_EMAIL: ${AUTH_DEMO_EMAIL:-analyst@traceframe.local}
+      AUTH_DEMO_NAME: ${AUTH_DEMO_NAME:-Morgan Reed}
+      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-Traceframe!2026}
+    command: ["sh", "/scripts/seed-demo-user.sh"]
     volumes:
       - ./db/seed-demo-user.sql:/seed/seed-demo-user.sql:ro
+      - ./scripts/seed-demo-user.sh:/scripts/seed-demo-user.sh:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
