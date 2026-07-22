@@ -23,6 +23,20 @@ The worker maintains its health heartbeat, removes expired sessions hourly, and
 processes durable ingestion jobs. It remains an internal polling process rather
 than an HTTP service.
 
+## Production topology
+
+Render runs the same service boundaries in production. The Next.js service is
+public behind Render HTTPS; the Python worker and MinIO are private services;
+PostgreSQL is managed and has no public allow-list. MinIO uses a persistent disk
+for this synthetic portfolio workload. It is a single-instance availability
+trade-off, not a design for irreplaceable evidence.
+
+GitHub Actions verifies pull requests and `main`. Render's Blueprint waits for
+those checks before deploying a commit. Both application images can execute the
+migration runner during pre-deploy; a PostgreSQL transaction-level advisory lock
+serialises them, and each migration is checked again while the lock is held.
+This preserves ordered, once-only application even when deployments overlap.
+
 ## Evidence ingestion
 
 `POST /api/cases/:id/sources` requires an authenticated analyst or admin and an
@@ -151,3 +165,6 @@ Existing volumes created before the runner are baselined by detecting their
 core tables. Migration failure stops dependent service startup. Applied files
 are immutable; upgrades use new forward migrations. Production rollback means
 restoring a pre-upgrade backup or applying a reviewed corrective migration.
+In production the same runner accepts Render's `DATABASE_URL` and executes as a
+pre-deploy command. The hosted database should be backed up before risky schema
+work, and schema changes should follow expand/migrate/contract compatibility.

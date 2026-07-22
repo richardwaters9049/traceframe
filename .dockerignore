@@ -1,0 +1,11 @@
+.git
+.github
+.env
+**/.env
+**/.next
+**/.venv
+**/__pycache__
+**/node_modules
+**/playwright-report
+**/test-results
+docs

@@ -35,3 +35,6 @@ observations and a bounded, on-demand Relationships view now reveal repeated
 indicators across ready sources without exposing their content. Strictly
 validated embedded SHA-256 values now participate in the same finding and
 correlation workflow.
+Added the production delivery foundation: gated GitHub CI, Render infrastructure
+for web, worker, PostgreSQL, and private MinIO, concurrent-safe migrations, and a
+protected-main branching and operations runbook.

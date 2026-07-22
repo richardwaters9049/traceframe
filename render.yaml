@@ -1,0 +1,123 @@
+services:
+  - type: web
+    name: traceframe-web
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./deploy/render/web.Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    preDeployCommand: sh /scripts/run-migrations.sh && sh /scripts/seed-demo-user.sh
+    buildFilter:
+      paths:
+        - apps/web/**
+        - db/seed-demo-user.sql
+        - scripts/**
+        - deploy/render/web.Dockerfile
+        - render.yaml
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: traceframe-db
+          property: connectionString
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_THROTTLE_SECRET
+        generateValue: true
+      - key: AUTH_DEMO_EMAIL
+        value: analyst@traceframe.local
+      - key: AUTH_DEMO_NAME
+        value: Morgan Reed
+      - key: AUTH_DEMO_PASSWORD
+        sync: false
+      - key: MINIO_ENDPOINT
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          property: hostport
+      - key: MINIO_BUCKET
+        value: case-source-material
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: worker
+    name: traceframe-worker
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./deploy/render/worker.Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    preDeployCommand: sh /scripts/run-migrations.sh
+    buildFilter:
+      paths:
+        - services/worker/**
+        - apps/web/drizzle/**
+        - scripts/run-migrations.sh
+        - deploy/render/worker.Dockerfile
+        - render.yaml
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: traceframe-db
+          property: connectionString
+      - key: POLL_INTERVAL_SECONDS
+        value: "5"
+      - key: WORKER_ID
+        value: traceframe-render-worker
+      - key: MINIO_ENDPOINT
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          property: hostport
+      - key: MINIO_BUCKET
+        value: case-source-material
+      - key: MINIO_ACCESS_KEY
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          envVarKey: MINIO_ROOT_USER
+      - key: MINIO_SECRET_KEY
+        fromService:
+          name: traceframe-minio
+          type: pserv
+          envVarKey: MINIO_ROOT_PASSWORD
+
+  - type: pserv
+    name: traceframe-minio
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    dockerfilePath: ./deploy/render/minio.Dockerfile
+    dockerContext: .
+    autoDeployTrigger: checksPass
+    disk:
+      name: traceframe-source-material
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: MINIO_ROOT_USER
+        generateValue: true
+      - key: MINIO_ROOT_PASSWORD
+        generateValue: true
+
+databases:
+  - name: traceframe-db
+    databaseName: traceframe
+    user: traceframe
+    plan: basic-256mb
+    region: frankfurt
+    postgresMajorVersion: "18"
+    diskSizeGB: 5
+    ipAllowList: []

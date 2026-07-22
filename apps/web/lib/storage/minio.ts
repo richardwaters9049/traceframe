@@ -16,10 +16,15 @@ function bucketName() {
   return process.env.MINIO_BUCKET ?? "case-source-material";
 }
 
+function endpointUrl() {
+  const endpoint = process.env.MINIO_ENDPOINT ?? "http://minio:9000";
+  return /^https?:\/\//i.test(endpoint) ? endpoint : `http://${endpoint}`;
+}
+
 function getClient() {
   if (client) return client;
   client = new S3Client({
-    endpoint: process.env.MINIO_ENDPOINT ?? "http://minio:9000",
+    endpoint: endpointUrl(),
     region: "us-east-1",
     forcePathStyle: true,
     credentials: {
