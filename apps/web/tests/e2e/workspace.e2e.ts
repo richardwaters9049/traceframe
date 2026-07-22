@@ -59,6 +59,14 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await page.getByRole("tab", { name: /^findings(?: · \d+)?$/ }).click();
     await expect(page.getByRole("heading", { name: "Analyst findings" })).toBeVisible();
     await expect(page.getByLabel("Finding summary")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Print", exact: true })).toBeVisible();
+    await page.emulateMedia({ media: "print" });
+    await expect(page.locator(".case-print-summary")).toBeVisible();
+    await expect(page.locator(".case-print-summary").getByRole("heading", { name: /Reviewed findings/ })).toBeVisible();
+    await page.emulateMedia({ media: "screen" });
+    await page.getByRole("tab", { name: "relationships", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Cross-source relationships" })).toBeVisible();
+    await expect(page.getByLabel("Relationship summary")).toBeVisible();
     await page.getByRole("button", { name: "Back to dashboard" }).click();
   }
 

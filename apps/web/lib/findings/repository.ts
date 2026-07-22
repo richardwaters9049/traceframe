@@ -14,6 +14,10 @@ type FindingRow = {
   created_at: Date; updated_at: Date; reviewed_at: Date | null;
 };
 
+type FindingExportCaseRow = {
+  id: string; title: string; status: string; priority: string; created_at: Date;
+};
+
 function serialiseFinding(row: FindingRow): FindingRecord {
   return {
     id: row.id,
@@ -84,6 +88,27 @@ export async function getCaseFindings(caseId: string) {
     ORDER BY f.created_at DESC, f.id DESC`;
   const findings = rows.map(serialiseFinding);
   return { findings, summary: summariseFindings(findings) };
+}
+
+export async function getFindingExportData(caseId: string) {
+  const sql = getDatabaseClient();
+  const [caseRows, collection] = await Promise.all([
+    sql<FindingExportCaseRow[]>`
+      SELECT id, title, status, priority, created_at FROM cases WHERE id = ${caseId} LIMIT 1`,
+    getCaseFindings(caseId),
+  ]);
+  const record = caseRows[0];
+  if (!record) return null;
+  return {
+    case: {
+      id: record.id,
+      title: record.title,
+      status: record.status,
+      priority: record.priority,
+      createdAt: record.created_at.toISOString(),
+    },
+    findings: collection.findings,
+  };
 }
 
 export async function proposeFinding(

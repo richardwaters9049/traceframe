@@ -16,6 +16,10 @@ EMAIL_PATTERN = re.compile(
     r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])", re.IGNORECASE
 )
 IPV4_PATTERN = re.compile(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)")
+DOMAIN_PATTERN = re.compile(
+    r"(?<![A-Z0-9-])(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}(?![A-Z0-9-])",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -117,6 +121,7 @@ def derive_observations(text: str) -> list[tuple[str, str, int]]:
         ("url", re.sub(r"[.,;:!?)\]}]+$", "", match)) for match in URL_PATTERN.findall(text)
     )
     values.extend(("email", match.lower()) for match in EMAIL_PATTERN.findall(text))
+    values.extend(("domain", match.lower()) for match in DOMAIN_PATTERN.findall(text))
     values.extend(
         ("ipv4", match)
         for match in IPV4_PATTERN.findall(text)

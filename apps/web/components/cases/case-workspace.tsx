@@ -2,18 +2,20 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Check, CircleCheckBig, CircleX, Clock3, Database, Eye,
-  FileText, Fingerprint, LoaderCircle, RefreshCw, SearchCheck, Upload, X,
+  AlertTriangle, ArrowLeft, Check, CircleCheckBig, CircleX, Clock3, Database, Download,
+  Eye, FileText, Fingerprint, LoaderCircle, Printer, RefreshCw, SearchCheck, Upload, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
 import type { CaseWorkspaceRecord } from "@/components/cases/workspace-content";
+import { CasePrintSummary } from "@/components/cases/case-print-summary";
+import { CaseRelationships } from "@/components/cases/case-relationships";
 import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import type { FindingRecord } from "@/lib/findings/contracts";
 import { apiRequest } from "@/lib/http/client";
 import type { SourceRecord } from "@/lib/sources/contracts";
 
-type WorkspaceTab = "analysis" | "sources" | "findings";
+type WorkspaceTab = "analysis" | "sources" | "findings" | "relationships";
 type FindingStatusFilter = "all" | FindingRecord["status"];
 type FindingKindFilter = "all" | FindingRecord["kind"];
 
@@ -67,6 +69,11 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const filteredFindings = findings.filter((finding) =>
     (findingStatusFilter === "all" || finding.status === findingStatusFilter)
     && (findingKindFilter === "all" || finding.kind === findingKindFilter));
+  const reviewedFindingCount = findingSummary.confirmed + findingSummary.dismissed;
+
+  function downloadReviewedFindings(format: "csv" | "json") {
+    window.location.assign(`/api/cases/${encodeURIComponent(record.id)}/findings/export?format=${format}`);
+  }
 
   async function refreshWorkspace() {
     const refreshed = await apiRequest<{ workspace: CaseWorkspaceRecord }>(`/api/cases/${encodeURIComponent(record.id)}`);
@@ -155,9 +162,8 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
         <span className="ui-meta inline-flex shrink-0 items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2 text-[#AEB7C5]"><Clock3 className="size-4 text-[#8594FF]" />{createdAt}</span>
       </div>
 
-      <div role="tablist" aria-label="Case workspace" className="ui-label mt-10 flex gap-7 border-b border-white/[0.065] text-[#98A2B2]">
-        {(["analysis", "sources", "findings"] as const).map((value) => <button key={value} role="tab" aria-selected={tab === value} type="button" onClick={() => setTab(value)} className={`cursor-pointer border-b-2 pb-3 capitalize transition ${tab === value ? "border-[#7C8DFF] text-[#E3E7ED]" : "border-transparent hover:text-white"}`}>{value}{value === "sources" && sources.length ? ` · ${sources.length}` : value === "findings" && findings.length ? ` · ${findings.length}` : ""}</button>)}
-        <button disabled title="Relationships are not available yet" className="hidden cursor-not-allowed border-b-2 border-transparent pb-3 opacity-45 sm:block">Relationships</button>
+      <div role="tablist" aria-label="Case workspace" className="ui-label mt-10 flex flex-wrap gap-x-5 gap-y-3 border-b border-white/[0.065] text-[#98A2B2] sm:gap-x-7">
+        {(["analysis", "sources", "findings", "relationships"] as const).map((value) => <button key={value} role="tab" aria-selected={tab === value} type="button" onClick={() => setTab(value)} className={`cursor-pointer border-b-2 pb-3 capitalize transition ${tab === value ? "border-[#7C8DFF] text-[#E3E7ED]" : "border-transparent hover:text-white"}`}>{value}{value === "sources" && sources.length ? ` · ${sources.length}` : value === "findings" && findings.length ? ` · ${findings.length}` : ""}</button>)}
       </div>
 
       <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -178,12 +184,12 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
 
               <div className="mt-5 space-y-3">
                 {!sources.length ? <div className="grid min-h-48 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.012] p-8 text-center"><div><Eye className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No source material yet</p><p className="ui-meta mt-2 text-[#AAB3C1]">The original stays in object storage; only provenance and derived analysis appear here.</p></div></div> : null}
-                {sources.map((source) => <article key={source.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-section-title truncate">{source.originalFilename}</p><p className="ui-meta mt-1 text-[#AAB3C1]">{readableBytes(source.sizeBytes)} · {source.mediaType} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(source.createdAt))}</p></div><span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${statusStyles(source.status)}`}>{source.status === "queued" || source.status === "processing" ? <LoaderCircle className="size-3.5 animate-spin" /> : source.status === "ready" ? <Check className="size-3.5" /> : <X className="size-3.5" />}{source.status}</span></div><p className="ui-meta mt-3 truncate font-mono text-[#8993A4]" title={source.sha256}>SHA-256 {source.sha256}</p>{source.status === "ready" ? <><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Characters</p><p className="ui-section-title mt-1">{source.characterCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Lines</p><p className="ui-section-title mt-1">{source.lineCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Words</p><p className="ui-section-title mt-1">{source.wordCount}</p></div></div>{source.observations.length ? <div className="mt-4 flex flex-wrap gap-2">{source.observations.map((observation) => <span key={observation.id} className="ui-meta max-w-full truncate rounded-lg bg-[#58D6C7]/[0.055] px-2.5 py-1.5 text-[#8FDCD3] ring-1 ring-inset ring-[#58D6C7]/10">{observation.kind.toUpperCase()} · {observation.value}{observation.occurrences > 1 ? ` ×${observation.occurrences}` : ""}</span>)}</div> : <p className="ui-meta mt-4 text-[#9FA9B8]">No email, URL, or IPv4 indicators were derived.</p>}</> : null}{source.failureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.failureReason}</p> : null}</article>)}
+                {sources.map((source) => <article key={source.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-section-title truncate">{source.originalFilename}</p><p className="ui-meta mt-1 text-[#AAB3C1]">{readableBytes(source.sizeBytes)} · {source.mediaType} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(source.createdAt))}</p></div><span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${statusStyles(source.status)}`}>{source.status === "queued" || source.status === "processing" ? <LoaderCircle className="size-3.5 animate-spin" /> : source.status === "ready" ? <Check className="size-3.5" /> : <X className="size-3.5" />}{source.status}</span></div><p className="ui-meta mt-3 truncate font-mono text-[#8993A4]" title={source.sha256}>SHA-256 {source.sha256}</p>{source.status === "ready" ? <><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Characters</p><p className="ui-section-title mt-1">{source.characterCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Lines</p><p className="ui-section-title mt-1">{source.lineCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Words</p><p className="ui-section-title mt-1">{source.wordCount}</p></div></div>{source.observations.length ? <div className="mt-4 flex flex-wrap gap-2">{source.observations.map((observation) => <span key={observation.id} className="ui-meta max-w-full truncate rounded-lg bg-[#58D6C7]/[0.055] px-2.5 py-1.5 text-[#8FDCD3] ring-1 ring-inset ring-[#58D6C7]/10">{observation.kind.toUpperCase()} · {observation.value}{observation.occurrences > 1 ? ` ×${observation.occurrences}` : ""}</span>)}</div> : <p className="ui-meta mt-4 text-[#9FA9B8]">No email, URL, IPv4, or domain indicators were derived.</p>}</> : null}{source.failureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.failureReason}</p> : null}</article>)}
               </div>
             </motion.div>
-          ) : (
+          ) : tab === "findings" ? (
             <motion.div key="findings" role="tabpanel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="min-h-[28rem] min-w-0 rounded-[1.5rem] border border-white/[0.07] bg-navigation p-5 sm:p-7">
-              <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><SearchCheck className="size-5" /></span><div><h2 className="ui-section-title">Analyst findings</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Machine observed · human reviewed</p></div></div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><SearchCheck className="size-5" /></span><div><h2 className="ui-section-title">Analyst findings</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Machine observed · human reviewed</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => downloadReviewedFindings("csv")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as CSV"><Download className="size-3.5" />CSV</button><button type="button" onClick={() => downloadReviewedFindings("json")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as JSON"><Download className="size-3.5" />JSON</button><button type="button" onClick={() => window.print()} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white" title="Print case summary"><Printer className="size-3.5" />Print</button></div></div>
 
               <div aria-label="Finding summary" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([
@@ -214,7 +220,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
               {findings.length ? <div className="mt-5 rounded-2xl border border-white/[0.065] bg-white/[0.012] p-3 sm:p-4"><div className="flex flex-col gap-3"><div role="group" aria-label="Filter findings by status" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{findingStatusFilters.map((status) => {
                 const count = status === "all" ? findingSummary.total : findingSummary[status];
                 return <button key={status} type="button" aria-pressed={findingStatusFilter === status} onClick={() => setFindingStatusFilter(status)} className={`ui-meta cursor-pointer rounded-lg px-2.5 py-1.5 capitalize ring-1 ring-inset transition ${findingStatusFilter === status ? "bg-primary/15 text-[#B7C0FF] ring-primary/30" : "bg-white/[0.025] text-[#AAB3C1] ring-white/[0.07] hover:text-white"}`}>{status} · {count}</button>;
-              })}</div><div className="flex items-center justify-end gap-3"><label htmlFor="finding-kind-filter" className="ui-meta shrink-0 text-[#8F99AA]">Indicator</label><select id="finding-kind-filter" value={findingKindFilter} onChange={(event) => setFindingKindFilter(event.target.value as FindingKindFilter)} className="ui-meta min-w-32 cursor-pointer rounded-lg border border-white/[0.08] bg-[#0D1118] px-2.5 py-2 text-[#D3D9E2] outline-none focus:border-primary/45"><option value="all">All types</option><option value="email">Email · {findingSummary.byKind.email}</option><option value="url">URL · {findingSummary.byKind.url}</option><option value="ipv4">IPv4 · {findingSummary.byKind.ipv4}</option></select></div></div><p aria-live="polite" className="ui-meta mt-3 text-[#8F99AA]">Showing {filteredFindings.length} of {findingSummary.total} findings</p></div> : null}
+              })}</div><div className="flex items-center justify-end gap-3"><label htmlFor="finding-kind-filter" className="ui-meta shrink-0 text-[#8F99AA]">Indicator</label><select id="finding-kind-filter" value={findingKindFilter} onChange={(event) => setFindingKindFilter(event.target.value as FindingKindFilter)} className="ui-meta min-w-32 cursor-pointer rounded-lg border border-white/[0.08] bg-[#0D1118] px-2.5 py-2 text-[#D3D9E2] outline-none focus:border-primary/45"><option value="all">All types</option><option value="email">Email · {findingSummary.byKind.email}</option><option value="url">URL · {findingSummary.byKind.url}</option><option value="ipv4">IPv4 · {findingSummary.byKind.ipv4}</option><option value="domain">Domain · {findingSummary.byKind.domain}</option></select></div></div><p aria-live="polite" className="ui-meta mt-3 text-[#8F99AA]">Showing {filteredFindings.length} of {findingSummary.total} findings</p></div> : null}
 
               <div className="mt-5 space-y-3">
                 {!observations.length ? <div className="grid min-h-48 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.012] p-8 text-center"><div><SearchCheck className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No observations to review</p><p className="ui-meta mt-2 text-[#AAB3C1]">Process a synthetic source before creating an analyst finding.</p></div></div> : null}
@@ -228,11 +234,14 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
                 </article>)}
               </div>
             </motion.div>
+          ) : (
+            <CaseRelationships caseId={record.id} />
           )}
         </AnimatePresence>
 
         <aside className="h-fit min-w-0 rounded-[1.5rem] border border-white/[0.07] bg-navigation p-5"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-[#58D6C7]/[0.07] text-[#6CDDD0]"><Fingerprint className="size-5" /></span><div><h2 className="ui-section-title">Audit trail</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">{verificationLabel}</p></div></div><div className="mt-6 space-y-5 border-l border-white/[0.07] pl-5">{auditEvents.map((event) => <article key={event.id} className="relative before:absolute before:-left-[1.43rem] before:top-1.5 before:size-2 before:rounded-full before:bg-primary"><p className="ui-label">{auditLabel(event.action)} · #{event.ledgerSequence}</p><p className="ui-meta mt-1.5 truncate text-[#AAB3C1]">{event.actorId}</p><p className="ui-meta mt-3 font-mono text-[#8993A4]">{event.eventHash.slice(0, 16)}…</p></article>)}</div></aside>
       </div>
+      <CasePrintSummary record={record} summary={findingSummary} findings={findings} />
     </section>
   );
 }

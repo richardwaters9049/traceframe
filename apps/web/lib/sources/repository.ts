@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { createAuditHash } from "@/lib/audit/hash";
 import { getDatabaseClient } from "@/lib/db/client";
-import type { SourceRecord, SourceUploadInput } from "@/lib/sources/contracts";
+import type { ObservationKind, SourceRecord, SourceUploadInput } from "@/lib/sources/contracts";
 import { deleteSourceObject, putSourceObject } from "@/lib/storage/minio";
 
 type SourceRow = {
@@ -12,7 +12,7 @@ type SourceRow = {
   status: SourceRecord["status"]; failure_reason: string | null; created_at: Date; processed_at: Date | null;
   character_count: number | null; line_count: number | null; word_count: number | null;
 };
-type ObservationRow = { id: string; source_id: string; kind: "ipv4" | "url" | "email"; value: string; occurrences: number };
+type ObservationRow = { id: string; source_id: string; kind: ObservationKind; value: string; occurrences: number };
 
 export function serialiseSources(rows: SourceRow[], observations: ObservationRow[]): SourceRecord[] {
   const bySource = new Map<string, ObservationRow[]>();

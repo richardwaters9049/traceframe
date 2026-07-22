@@ -73,6 +73,30 @@ then filters the already bounded case collection in component state. Filter
 choices are intentionally not encoded in routes or query strings and do not
 trigger additional database requests.
 
+Reviewed findings have two deliberately bounded hand-off paths. An authenticated
+read-only Route Handler returns CSV or JSON containing only `confirmed` and
+`dismissed` findings; proposed decisions never enter an export. Responses use
+opaque case identifiers in filenames, disable caching, and neutralise CSV cells
+that spreadsheet software could interpret as formulas.
+
+The case workspace also renders a print-only summary from the already loaded
+case and finding collection. The printed report includes case context, review
+counts, and terminal finding decisions, while ordinary navigation, controls,
+pending proposals, and source content remain outside the print layout.
+
+## Cross-source relationships
+
+The worker derives normalised domain observations alongside email, URL, and
+IPv4 values. Relationships are computed only when requested and only within one
+case: an indicator qualifies when it appears in at least two ready sources. The
+query returns at most 50 correlations and at most 10 source details per
+correlation, ordered deterministically by prevalence and occurrence count.
+
+`GET /api/cases/:id/correlations` requires the same authenticated read
+capability as the case workspace, disables response caching, and returns no
+normalised source content. The Relationships tab calls it only when opened, so
+ordinary case loading remains bounded to the established workspace payload.
+
 ## Case queries and workspace state
 
 The dashboard server component fetches a bounded 20-record summary page using a

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const MAX_SOURCE_BYTES = 1024 * 1024;
 export const sourceMediaTypes = ["text/plain", "text/csv", "application/json"] as const;
+export const observationKinds = ["email", "url", "ipv4", "domain"] as const;
+export type ObservationKind = (typeof observationKinds)[number];
 
 const extensionByMediaType: Record<(typeof sourceMediaTypes)[number], ReadonlySet<string>> = {
   "text/plain": new Set(["txt", "log"]),
@@ -15,7 +17,7 @@ export type SourceUploadInput = {
   bytes: Uint8Array;
 };
 
-export type SourceObservation = { id: string; kind: "ipv4" | "url" | "email"; value: string; occurrences: number };
+export type SourceObservation = { id: string; kind: ObservationKind; value: string; occurrences: number };
 export type SourceRecord = {
   id: string;
   originalFilename: string;

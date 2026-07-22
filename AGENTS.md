@@ -72,7 +72,7 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
   JSON source up to 1 MiB and creates its provenance, job, and global audit event.
 - The Python worker claims jobs with `FOR UPDATE SKIP LOCKED`, verifies source
   integrity, normalises text, retries safely, and derives counted email, URL,
-  and IPv4 observations.
+  IPv4, and domain observations.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
 - One derived observation may be promoted into one finding. Findings begin as
@@ -83,11 +83,16 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
 - Case finding summaries are derived server-side from the returned finding
   collection. Status and indicator filters remain local workspace state and do
   not use routes, query strings, or extra database requests.
+- Reviewed-finding exports contain terminal `confirmed` and `dismissed` records
+  only. CSV and JSON downloads are authenticated, non-cacheable, and named with
+  the opaque case ID; the case workspace also provides a print-only summary.
+- Cross-source relationships load on demand and include only indicators found
+  in at least two ready sources within the selected case. Preserve the limits
+  of 50 correlations and 10 displayed source records per correlation.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
-parsers, richer observation types, cross-source correlation, finding exports,
-printable case summaries, source retention controls, and production dead-letter operations are planned
-product work. Do not describe
+parsers, additional observation types, source retention controls, and
+production dead-letter operations are planned product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.
 
@@ -106,6 +111,11 @@ debt from the 19/07/2026 review.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
   read/create cases, upload sources, and manage findings; `reviewer` is
   read-only, and unknown roles fail closed.
+- Keep finding exports restricted to terminal reviewed records. Preserve
+  non-cacheable responses, opaque filenames, and spreadsheet-formula
+  neutralisation for CSV values.
+- Keep correlation queries case-scoped, read-only, non-cacheable, limited to
+  ready sources, and bounded by the documented result and source-detail caps.
 - Preserve the atomic case-and-first-audit-event transaction. The transaction
   must lock the singleton `audit_chain_heads` row with `SELECT ... FOR UPDATE`,
   assign the next monotonic `ledger_sequence`, append the event, and advance the

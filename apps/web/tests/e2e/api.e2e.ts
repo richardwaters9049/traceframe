@@ -39,7 +39,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
     const body = await response.json() as { sources: Array<{ status: string; observations: Array<{ kind: string }> }> };
     return { status: body.sources[0]?.status, kinds: body.sources[0]?.observations.map((item) => item.kind).sort() };
-  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["email", "ipv4", "url"] });
+  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["domain", "email", "ipv4", "url"] });
 
   const sourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
   const sourcesBody = await sourcesResponse.json() as {
@@ -86,7 +86,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     proposed: 0,
     confirmed: 1,
     dismissed: 0,
-    byKind: { email: 0, url: 0, ipv4: 1 },
+    byKind: { email: 0, url: 0, ipv4: 1, domain: 0 },
   });
 
   const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
@@ -111,6 +111,81 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   }));
   expect(sourceWorkspace.workspace.findingSummary).toEqual(expect.objectContaining({
     total: 1, proposed: 0, confirmed: 1, dismissed: 0,
+  }));
+
+  expect((await request.get(`/api/cases/${firstCreation.case.id}/findings/export?format=pdf`)).status()).toBe(400);
+  const csvExportResponse = await request.get(`/api/cases/${firstCreation.case.id}/findings/export?format=csv`);
+  expect(csvExportResponse.status()).toBe(200);
+  expect(csvExportResponse.headers()["cache-control"]).toContain("no-store");
+  expect(csvExportResponse.headers()["content-disposition"]).toContain(`traceframe-case-${firstCreation.case.id}-reviewed-findings.csv`);
+  expect(csvExportResponse.headers()["x-content-type-options"]).toBe("nosniff");
+  const csvExport = await csvExportResponse.text();
+  expect(csvExport.startsWith("\uFEFF")).toBe(true);
+  expect(csvExport).toContain('"confirmed"');
+  expect(csvExport).not.toContain('"proposed"');
+
+  const jsonExportResponse = await request.get(`/api/cases/${firstCreation.case.id}/findings/export?format=json`);
+  expect(jsonExportResponse.status()).toBe(200);
+  const jsonExport = await jsonExportResponse.json() as {
+    schemaVersion: number;
+    case: { id: string };
+    summary: { reviewed: number; confirmed: number; dismissed: number };
+    findings: Array<{ status: string; reviewRationale: string }>;
+  };
+  expect(jsonExport).toEqual(expect.objectContaining({
+    schemaVersion: 1,
+    case: expect.objectContaining({ id: firstCreation.case.id }),
+    summary: { reviewed: 1, confirmed: 1, dismissed: 0 },
+  }));
+  expect(jsonExport.findings).toContainEqual(expect.objectContaining({
+    status: "confirmed",
+    reviewRationale: "Confirmed as relevant synthetic evidence.",
+  }));
+
+  const secondSourceUpload = await request.post(`/api/cases/${firstCreation.case.id}/sources`, {
+    headers: { Origin: origin },
+    multipart: {
+      file: {
+        name: "synthetic-related-source.log",
+        mimeType: "text/plain",
+        buffer: Buffer.from(
+          "Related synthetic record only.\nresponder@example.test\n192.0.2.42\nexample.test",
+        ),
+      },
+    },
+  });
+  expect(secondSourceUpload.status(), await secondSourceUpload.text()).toBe(202);
+  await expect.poll(async () => {
+    const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+    const body = await response.json() as { sources: Array<{ status: string }> };
+    return { count: body.sources.length, statuses: body.sources.map((source) => source.status) };
+  }, { timeout: 20_000 }).toEqual({ count: 2, statuses: ["ready", "ready"] });
+
+  const correlationResponse = await request.get(`/api/cases/${firstCreation.case.id}/correlations`);
+  expect(correlationResponse.status()).toBe(200);
+  expect(correlationResponse.headers()["cache-control"]).toContain("no-store");
+  const correlationCollection = await correlationResponse.json() as {
+    correlations: Array<{ kind: string; value: string; sourceCount: number; totalOccurrences: number; sources: unknown[] }>;
+    summary: { total: number; sourceLinks: number; byKind: Record<string, number> };
+    limits: { correlations: number; sourcesPerCorrelation: number };
+  };
+  expect(correlationCollection.summary).toEqual({
+    total: 2,
+    sourceLinks: 4,
+    byKind: { email: 0, url: 0, ipv4: 1, domain: 1 },
+  });
+  expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
+    kind: "domain",
+    value: "example.test",
+    sourceCount: 2,
+    totalOccurrences: 4,
+    sources: expect.arrayContaining([expect.objectContaining({ sourceFilename: "synthetic-source.txt" })]),
+  }));
+  expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
+    kind: "ipv4",
+    value: "192.0.2.42",
+    sourceCount: 2,
+    totalOccurrences: 2,
   }));
 
   const pageResponse = await request.get("/api/cases?limit=2");
@@ -142,6 +217,8 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(await dashboardResponse.text()).toContain("Chain verified");
   expect((await request.post("/api/auth/logout", { headers: { Origin: origin } })).status()).toBe(200);
   expect((await request.get("/api/cases")).status()).toBe(401);
+  expect((await request.get(`/api/cases/${firstCreation.case.id}/findings/export`)).status()).toBe(401);
+  expect((await request.get(`/api/cases/${firstCreation.case.id}/correlations`)).status()).toBe(401);
 
   const unknown = { email: `unknown-${runId}@traceframe.local`, password: "NotThePassword!2026" };
   let finalStatus = 0;

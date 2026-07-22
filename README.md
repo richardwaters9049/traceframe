@@ -27,13 +27,17 @@ Traceframe currently provides a complete first vertical slice:
 - Durable PostgreSQL ingestion jobs with safe worker claiming, retries, and
   stale-lease recovery.
 - Deterministic UTF-8 normalisation with source integrity verification and
-  derived email, URL, and IPv4 observations.
+  derived email, URL, IPv4, and domain observations.
 - Live source status, provenance, normalisation counts, and observations inside
   the case workspace.
+- An on-demand Relationships view that surfaces repeated indicators across
+  ready sources using bounded correlation and source-detail limits.
 - Reviewable analyst findings that promote individual observations into
   proposed, confirmed, or dismissed decisions with recorded rationale.
 - Server-derived case finding totals with responsive status and indicator-type
   filters that remain inside the workspace state.
+- Safe CSV and JSON downloads containing reviewed findings only, plus a focused
+  printable case summary for review and hand-off.
 - Atomic case and audit-event creation backed by a verified, monotonic global
   SHA-256 ledger.
 - Login throttling, same-origin mutation checks, request correlation, and
@@ -47,9 +51,9 @@ Traceframe currently provides a complete first vertical slice:
 The Python worker publishes a health heartbeat, removes expired sessions, and
 processes one durable ingestion job at a time. The first ingestion slice is
 deliberately narrow: UTF-8 text-like files up to 1 MiB are integrity-checked,
-normalised, and scanned for email, URL, and IPv4 observations. Analysts can
+normalised, and scanned for email, URL, IPv4, and domain observations. Analysts can
 promote those observations into audited findings. Binary evidence, large-file
-streaming, richer parsers, and cross-source correlation remain future work.
+streaming, and richer parsers remain future work.
 
 ## Product flow
 
@@ -67,7 +71,10 @@ After signing in, the user stays within one protected workspace:
 8. Review its SHA-256 provenance, normalisation counts, and derived indicators.
 9. Promote a derived observation into a proposed finding, record an analyst
    note, then confirm or dismiss it with a rationale.
-10. Open the architecture view from the same component-driven workspace.
+10. Download the reviewed decisions as CSV or JSON, or print a concise case
+    summary without exposing pending proposals.
+11. Open Relationships to inspect indicators repeated across ready sources.
+12. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.
@@ -239,9 +246,11 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
 | `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
 | `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
+| `GET` | `/api/cases/:id/correlations` | Return a bounded view of indicators repeated across ready sources |
 | `GET` | `/api/cases/:id/findings` | Return findings with case-level lifecycle and indicator summaries |
 | `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
 | `PATCH` | `/api/cases/:id/findings/:findingId` | Confirm or dismiss a proposed finding with rationale |
+| `GET` | `/api/cases/:id/findings/export?format=csv\|json` | Download reviewed findings in a safe, non-cacheable format |
 | `GET` | `/api/health` | Report web and database availability |
 
 ## Security and integrity choices
@@ -268,6 +277,9 @@ curl -fsS http://127.0.0.1:3000/api/health
 - Finding proposals and terminal review decisions extend the global ledger in
   the same transaction as their state change. Actor identity comes from the
   server session, and analyst notes are not copied into audit metadata or logs.
+- Finding exports require an authenticated read capability and contain only
+  confirmed or dismissed findings. Responses are non-cacheable, filenames use
+  opaque case IDs, and CSV cells are neutralised against spreadsheet formulas.
 - A locked PostgreSQL chain-head row assigns each global audit event a monotonic
   sequence and ensures concurrent writers extend one unambiguous head.
 - Server-side verification recalculates every canonical event digest and checks
@@ -279,6 +291,8 @@ curl -fsS http://127.0.0.1:3000/api/health
   capability.
 - User-specific and case-specific dashboard data is dynamically rendered and is
   not cached across sessions.
+- Cross-source correlation is read-only, loaded on demand, restricted to ready
+  sources in one case, and capped at 50 indicators with 10 source details each.
 - The project contains synthetic information only.
 
 Production deployment would additionally require HTTPS with
@@ -321,8 +335,8 @@ automatic down-migrations are intentionally not provided.
 ## Next milestones
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
-- Expand observation types and add bounded cross-source correlation.
-- Add safe reviewed-finding exports and printable case summaries.
+- Add carefully validated hash and user-agent observation types.
 - Add source lifecycle controls, retention policy, and object reconciliation.
+- Add reviewed-finding bundles with provenance manifests for controlled hand-off.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.

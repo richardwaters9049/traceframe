@@ -1,6 +1,9 @@
 import { z } from "zod";
 
+import type { ObservationKind } from "@/lib/sources/contracts";
+
 export const findingStatuses = ["proposed", "confirmed", "dismissed"] as const;
+export const findingExportFormats = ["csv", "json"] as const;
 
 export const proposeFindingSchema = z.object({
   observationId: z.string().uuid(),
@@ -21,7 +24,7 @@ export type FindingRecord = {
   observationId: string;
   sourceId: string;
   sourceFilename: string;
-  kind: "ipv4" | "url" | "email";
+  kind: ObservationKind;
   value: string;
   occurrences: number;
   status: (typeof findingStatuses)[number];
@@ -39,5 +42,28 @@ export type FindingSummary = {
   proposed: number;
   confirmed: number;
   dismissed: number;
-  byKind: { email: number; url: number; ipv4: number };
+  byKind: Record<ObservationKind, number>;
+};
+
+export type FindingExportCase = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  createdAt: string;
+};
+
+export type ReviewedFindingRecord = FindingRecord & {
+  status: "confirmed" | "dismissed";
+  reviewRationale: string;
+  reviewedBy: string;
+  reviewedAt: string;
+};
+
+export type ReviewedFindingExport = {
+  schemaVersion: 1;
+  exportedAt: string;
+  case: FindingExportCase;
+  summary: { reviewed: number; confirmed: number; dismissed: number };
+  findings: ReviewedFindingRecord[];
 };

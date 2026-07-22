@@ -29,4 +29,7 @@ coverage were updated, with web, worker, cross-browser, reflow, and dependency
 checks passing. Derived observations can now be promoted into audited analyst
 findings and confirmed or dismissed with a recorded rationale.
 Case-level finding totals and responsive lifecycle and indicator filters now
-make those decisions easier to review.
+make those decisions easier to review. Reviewed findings can now be exported as
+safe CSV or JSON, with a focused printable case summary for hand-off. Domain
+observations and a bounded, on-demand Relationships view now reveal repeated
+indicators across ready sources without exposing their content.

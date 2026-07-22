@@ -187,3 +187,145 @@
     @apply text-base leading-7 tracking-[0.03em];
   }
 }
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #151821 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .case-print-summary,
+  .case-print-summary * {
+    visibility: visible !important;
+  }
+
+  .case-print-summary {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    color: #151821;
+    font-family: Arial, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 0.01em;
+  }
+
+  .case-print-header,
+  .case-print-finding-heading,
+  .case-print-section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .case-print-header {
+    border-bottom: 2px solid #151821;
+    padding-bottom: 12px;
+  }
+
+  .case-print-brand {
+    font-size: 18pt;
+    font-weight: 700;
+  }
+
+  .case-print-summary h1 {
+    margin-top: 24px;
+    font-size: 24pt;
+    line-height: 1.15;
+  }
+
+  .case-print-context {
+    margin-top: 8px;
+    color: #414754;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .case-print-metadata {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .case-print-metadata > div,
+  .case-print-finding {
+    border: 1px solid #cdd1d8;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .case-print-summary dt,
+  .case-print-finding-heading p {
+    color: #555d69;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .case-print-summary dd {
+    margin-top: 4px;
+    white-space: pre-wrap;
+  }
+
+  .case-print-section-heading {
+    align-items: baseline;
+    margin-top: 26px;
+    border-bottom: 1px solid #cdd1d8;
+    padding-bottom: 6px;
+  }
+
+  .case-print-section-heading h2 {
+    font-size: 15pt;
+  }
+
+  .case-print-finding {
+    margin-top: 12px;
+    break-inside: avoid;
+  }
+
+  .case-print-finding-heading h3 {
+    margin-top: 3px;
+    font-size: 12pt;
+    overflow-wrap: anywhere;
+  }
+
+  .case-print-finding-heading strong {
+    border: 1px solid #7882a8;
+    border-radius: 999px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+  }
+
+  .case-print-finding dl {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .case-print-empty {
+    margin-top: 12px;
+    border: 1px dashed #aeb4be;
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+  }
+
+  .case-print-summary footer {
+    margin-top: 24px;
+    border-top: 1px solid #cdd1d8;
+    padding-top: 8px;
+    color: #626a76;
+    font-size: 8pt;
+  }
+}

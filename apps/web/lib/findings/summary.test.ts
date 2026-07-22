@@ -9,12 +9,13 @@ describe("summariseFindings", () => {
       { status: "confirmed", kind: "email" },
       { status: "dismissed", kind: "ipv4" },
       { status: "confirmed", kind: "url" },
+      { status: "proposed", kind: "domain" },
     ])).toEqual({
-      total: 4,
-      proposed: 1,
+      total: 5,
+      proposed: 2,
       confirmed: 2,
       dismissed: 1,
-      byKind: { email: 2, url: 1, ipv4: 1 },
+      byKind: { email: 2, url: 1, ipv4: 1, domain: 1 },
     });
   });
 
@@ -24,7 +25,7 @@ describe("summariseFindings", () => {
       proposed: 0,
       confirmed: 0,
       dismissed: 0,
-      byKind: { email: 0, url: 0, ipv4: 0 },
+      byKind: { email: 0, url: 0, ipv4: 0, domain: 0 },
     });
   });
 });

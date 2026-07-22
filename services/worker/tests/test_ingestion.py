@@ -14,6 +14,7 @@ def test_derive_observations_counts_valid_indicators() -> None:
     )
 
     assert ("email", "analyst@example.test", 1) in result
+    assert ("domain", "example.test", 2) in result
     assert ("ipv4", "192.0.2.4", 2) in result
     assert ("url", "https://example.test/path", 1) in result
     assert all(value != "999.0.0.1" for _, value, _ in result)

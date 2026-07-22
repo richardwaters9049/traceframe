@@ -6,7 +6,7 @@ export function summariseFindings(findings: ReadonlyArray<Pick<FindingRecord, "s
     proposed: 0,
     confirmed: 0,
     dismissed: 0,
-    byKind: { email: 0, url: 0, ipv4: 0 },
+    byKind: { email: 0, url: 0, ipv4: 0, domain: 0 },
   };
 
   for (const finding of findings) {
