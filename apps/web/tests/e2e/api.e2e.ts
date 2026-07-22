@@ -41,13 +41,58 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     return { status: body.sources[0]?.status, kinds: body.sources[0]?.observations.map((item) => item.kind).sort() };
   }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["email", "ipv4", "url"] });
 
+  const sourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+  const sourcesBody = await sourcesResponse.json() as {
+    sources: Array<{ observations: Array<{ id: string; kind: string }> }>;
+  };
+  const observationId = sourcesBody.sources[0]?.observations.find((item) => item.kind === "ipv4")?.id;
+  expect(observationId).toBeTruthy();
+
+  expect((await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
+    headers: { Origin: "https://untrusted.invalid" },
+    data: { observationId, note: "Synthetic address requires analyst review." },
+  })).status()).toBe(403);
+  const proposalResponse = await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
+    headers: { Origin: origin },
+    data: { observationId, note: "Synthetic address requires analyst review." },
+  });
+  expect(proposalResponse.status()).toBe(201);
+  const proposal = await proposalResponse.json() as { findingId: string };
+  expect((await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
+    headers: { Origin: origin },
+    data: { observationId, note: "Duplicate proposal." },
+  })).status()).toBe(409);
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}/findings/${proposal.findingId}`, {
+    headers: { Origin: origin }, data: { status: "confirmed", rationale: "No" },
+  })).status()).toBe(400);
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}/findings/${proposal.findingId}`, {
+    headers: { Origin: origin },
+    data: { status: "confirmed", rationale: "Confirmed as relevant synthetic evidence." },
+  })).status()).toBe(200);
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}/findings/${proposal.findingId}`, {
+    headers: { Origin: origin },
+    data: { status: "dismissed", rationale: "Attempting a second review decision." },
+  })).status()).toBe(409);
+
   const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
   expect(sourceWorkspaceResponse.status()).toBe(200);
   const sourceWorkspace = await sourceWorkspaceResponse.json() as {
-    workspace: { verification: { status: string }; auditEvents: Array<{ action: string }> };
+    workspace: {
+      verification: { status: string };
+      auditEvents: Array<{ action: string }>;
+      findings: Array<{ id: string; status: string; analystNote: string; reviewRationale: string | null }>;
+    };
   };
   expect(sourceWorkspace.workspace.verification.status).toBe("verified");
   expect(sourceWorkspace.workspace.auditEvents.some((event) => event.action === "source.uploaded")).toBe(true);
+  expect(sourceWorkspace.workspace.auditEvents.some((event) => event.action === "finding.proposed")).toBe(true);
+  expect(sourceWorkspace.workspace.auditEvents.some((event) => event.action === "finding.confirmed")).toBe(true);
+  expect(sourceWorkspace.workspace.findings).toContainEqual(expect.objectContaining({
+    id: proposal.findingId,
+    status: "confirmed",
+    analystNote: "Synthetic address requires analyst review.",
+    reviewRationale: "Confirmed as relevant synthetic evidence.",
+  }));
 
   const pageResponse = await request.get("/api/cases?limit=2");
   expect(pageResponse.status()).toBe(200);

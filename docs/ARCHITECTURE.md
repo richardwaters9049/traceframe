@@ -50,6 +50,22 @@ The case workspace loads source summaries on demand. While any source is queued
 or processing, the client polls the narrow source endpoint every two seconds;
 polling stops once all sources reach ready or failed state.
 
+## Analyst findings
+
+Machine-derived observations remain immutable provenance records. An analyst or
+admin can promote one observation into one finding with a required note. The
+finding begins as `proposed` and may transition once to `confirmed` or
+`dismissed`; either terminal decision requires a review rationale. Reviewers can
+read findings but cannot create or decide them.
+
+Proposal and review Route Handlers validate path and JSON input, require an
+authenticated same-origin mutation, and derive both the database user and audit
+actor from the server session. Each finding state change and its
+`finding.proposed`, `finding.confirmed`, or `finding.dismissed` event are written
+in one transaction while holding the global audit-chain head lock. Analyst notes
+and review rationale stay in the finding record rather than logs or immutable
+audit metadata.
+
 ## Case queries and workspace state
 
 The dashboard server component fetches a bounded 20-record summary page using a
@@ -89,9 +105,10 @@ Responses include request IDs and server logs use structured event records
 without credentials or session tokens.
 
 Role capabilities are explicit and fail closed: `analyst` and `admin` may read
-and create cases and upload sources, `reviewer` may read only, and unknown roles
-receive no case access. This is workspace-level authorisation; case ownership or membership must
-be designed before cases are shared across separate workspaces.
+and create cases, upload sources, and manage findings; `reviewer` may read only,
+and unknown roles receive no case access. This is workspace-level authorisation;
+case ownership or membership must be designed before cases are shared across
+separate workspaces.
 
 ## Schema lifecycle
 

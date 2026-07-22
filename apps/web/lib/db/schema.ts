@@ -113,6 +113,20 @@ export const sourceObservations = pgTable("source_observations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [index("source_observations_source_idx").on(table.sourceId, table.kind, table.createdAt, table.id)]);
 
+export const findings = pgTable("findings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+  observationId: uuid("observation_id").notNull().references(() => sourceObservations.id, { onDelete: "restrict" }).unique(),
+  status: text("status").notNull().default("proposed"),
+  analystNote: text("analyst_note").notNull(),
+  reviewRationale: text("review_rationale"),
+  createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  reviewedBy: uuid("reviewed_by").references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+}, (table) => [index("findings_case_created_idx").on(table.caseId, table.createdAt.desc(), table.id.desc())]);
+
 export const auditChainHeads = pgTable("audit_chain_heads", {
   ledger: text("ledger").primaryKey(),
   lastSequence: bigint("last_sequence", { mode: "number" }).notNull().default(0),

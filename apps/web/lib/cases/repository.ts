@@ -4,6 +4,7 @@ import { createAuditHash } from "@/lib/audit/hash";
 import { verifyAuditEvents, type AuditVerification, type VerifiableAuditEvent } from "@/lib/audit/verify";
 import type { AuditEventRecord, CaseCursorPage, CaseRecord, CreateCaseInput } from "@/lib/cases/contracts";
 import { getDatabaseClient } from "@/lib/db/client";
+import { listCaseFindings } from "@/lib/findings/repository";
 import { listCaseSources } from "@/lib/sources/repository";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -148,14 +149,15 @@ export async function verifyGlobalAuditLedger(): Promise<AuditVerification> {
 
 export async function getCaseWorkspace(caseId: string) {
   const sql = getDatabaseClient();
-  const [caseRows, auditRows, verification, sources] = await Promise.all([
+  const [caseRows, auditRows, verification, sources, findings] = await Promise.all([
     sql<CaseRow[]>`SELECT id, title, summary, status, priority, created_at, updated_at FROM cases WHERE id = ${caseId} LIMIT 1`,
     sql<AuditEventRow[]>`SELECT id, ledger_sequence, actor_id, action, object_type, object_id, reason, metadata,
       event_hash, previous_hash, created_at FROM audit_events
       WHERE object_type = 'case' AND object_id = ${caseId} ORDER BY ledger_sequence DESC`,
     verifyGlobalAuditLedger(),
     listCaseSources(caseId),
+    listCaseFindings(caseId),
   ]);
   if (!caseRows[0]) return null;
-  return { case: serialiseCase(caseRows[0]), auditEvents: auditRows.map(serialiseAuditEvent), verification, sources };
+  return { case: serialiseCase(caseRows[0]), auditEvents: auditRows.map(serialiseAuditEvent), verification, sources, findings };
 }

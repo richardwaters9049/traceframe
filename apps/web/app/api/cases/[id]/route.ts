@@ -14,7 +14,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
   try {
     const workspace = await getCaseWorkspace(id);
-    return workspace ? jsonResponse({ workspace }, 200, requestId) : jsonResponse({ error: "Case not found." }, 404, requestId);
+    return workspace ? jsonResponse({ workspace: {
+      ...workspace,
+      capabilities: {
+        canCreateFindings: can(user, "findings:create"),
+        canReviewFindings: can(user, "findings:review"),
+      },
+    } }, 200, requestId) : jsonResponse({ error: "Case not found." }, 404, requestId);
   } catch (error) {
     requestLog("error", "cases.workspace.error", requestId, { error: error instanceof Error ? error.name : "unknown" });
     return jsonResponse({ error: "The case workspace could not be loaded." }, 500, requestId);

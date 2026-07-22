@@ -30,6 +30,8 @@ Traceframe currently provides a complete first vertical slice:
   derived email, URL, and IPv4 observations.
 - Live source status, provenance, normalisation counts, and observations inside
   the case workspace.
+- Reviewable analyst findings that promote individual observations into
+  proposed, confirmed, or dismissed decisions with recorded rationale.
 - Atomic case and audit-event creation backed by a verified, monotonic global
   SHA-256 ledger.
 - Login throttling, same-origin mutation checks, request correlation, and
@@ -43,9 +45,9 @@ Traceframe currently provides a complete first vertical slice:
 The Python worker publishes a health heartbeat, removes expired sessions, and
 processes one durable ingestion job at a time. The first ingestion slice is
 deliberately narrow: UTF-8 text-like files up to 1 MiB are integrity-checked,
-normalised, and scanned for email, URL, and IPv4 observations. Binary evidence,
-large-file streaming, richer parsers, and analyst-authored findings remain
-future work.
+normalised, and scanned for email, URL, and IPv4 observations. Analysts can
+promote those observations into audited findings. Binary evidence, large-file
+streaming, richer parsers, and cross-source correlation remain future work.
 
 ## Product flow
 
@@ -61,7 +63,9 @@ After signing in, the user stays within one protected workspace:
 7. Open **Sources**, upload a small synthetic text-like file, and follow its
    queued, processing, and ready states without leaving the workspace.
 8. Review its SHA-256 provenance, normalisation counts, and derived indicators.
-9. Open the architecture view from the same component-driven workspace.
+9. Promote a derived observation into a proposed finding, record an analyst
+   note, then confirm or dismiss it with a rationale.
+10. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.
@@ -233,6 +237,9 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
 | `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
 | `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
+| `GET` | `/api/cases/:id/findings` | Return the case's reviewable analyst findings |
+| `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
+| `PATCH` | `/api/cases/:id/findings/:findingId` | Confirm or dismiss a proposed finding with rationale |
 | `GET` | `/api/health` | Report web and database availability |
 
 ## Security and integrity choices
@@ -256,6 +263,9 @@ curl -fsS http://127.0.0.1:3000/api/health
 - A source record, durable job, and `source.uploaded` audit event are committed
   atomically after object storage succeeds; the object is removed if that
   transaction fails.
+- Finding proposals and terminal review decisions extend the global ledger in
+  the same transaction as their state change. Actor identity comes from the
+  server session, and analyst notes are not copied into audit metadata or logs.
 - A locked PostgreSQL chain-head row assigns each global audit event a monotonic
   sequence and ensures concurrent writers extend one unambiguous head.
 - Server-side verification recalculates every canonical event digest and checks
@@ -309,8 +319,8 @@ automatic down-migrations are intentionally not provided.
 ## Next milestones
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
-- Expand observation types and promote derived observations into reviewable
-  analyst findings.
+- Expand observation types and add bounded cross-source correlation.
+- Add finding filters, case-level summaries, and reviewed-finding exports.
 - Add source lifecycle controls, retention policy, and object reconciliation.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.

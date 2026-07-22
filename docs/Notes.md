@@ -26,4 +26,5 @@ are stored in MinIO, queued through PostgreSQL, processed safely by the Python
 worker, and presented in the case workspace with provenance, derived email, URL,
 and IPv4 observations, and linked audit events. Documentation and automated
 coverage were updated, with web, worker, cross-browser, reflow, and dependency
-checks passing.
+checks passing. Derived observations can now be promoted into audited analyst
+findings and confirmed or dismissed with a recorded rationale.

@@ -57,8 +57,8 @@ local state, or animation requires it, and keep client boundaries focused.
 
 The completed application slice includes authentication, a responsive protected
 workspace, a paginated case register, on-demand case workspaces, case creation,
-a globally verified audit ledger, and a narrow end-to-end evidence-ingestion
-workflow. Keep these current boundaries intact:
+a globally verified audit ledger, a narrow end-to-end evidence-ingestion
+workflow, and reviewable analyst findings. Keep these current boundaries intact:
 
 - The dashboard fetches a bounded 20-record summary page; it must not eagerly
   load every case workspace or audit history.
@@ -75,10 +75,16 @@ workflow. Keep these current boundaries intact:
   and IPv4 observations.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
+- One derived observation may be promoted into one finding. Findings begin as
+  `proposed` and may transition once to `confirmed` or `dismissed` with a
+  required rationale.
+- Finding proposals and decisions update the finding and append their global
+  audit event atomically. Notes and rationale stay out of logs and audit metadata.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
-parsers, richer observation types, analyst findings, source retention controls,
-and production dead-letter operations are planned product work. Do not describe
+parsers, richer observation types, cross-source correlation, finding exports,
+source retention controls, and production dead-letter operations are planned
+product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.
 
@@ -95,8 +101,8 @@ debt from the 19/07/2026 review.
   normalised email lookup, and uniqueness on `lower(email)`.
 - Require explicit same-origin validation on every state-changing Route Handler.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
-  read/create cases and upload sources, `reviewer` is read-only, and unknown
-  roles fail closed.
+  read/create cases, upload sources, and manage findings; `reviewer` is
+  read-only, and unknown roles fail closed.
 - Preserve the atomic case-and-first-audit-event transaction. The transaction
   must lock the singleton `audit_chain_heads` row with `SELECT ... FOR UPDATE`,
   assign the next monotonic `ledger_sequence`, append the event, and advance the

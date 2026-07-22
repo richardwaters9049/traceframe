@@ -1,10 +1,10 @@
 import type { AuthenticatedUser } from "@/lib/auth/session";
 
-export type WorkspaceCapability = "cases:read" | "cases:create" | "sources:create";
+export type WorkspaceCapability = "cases:read" | "cases:create" | "sources:create" | "findings:create" | "findings:review";
 
 const roleCapabilities: Record<string, ReadonlySet<WorkspaceCapability>> = {
-  admin: new Set(["cases:read", "cases:create", "sources:create"]),
-  analyst: new Set(["cases:read", "cases:create", "sources:create"]),
+  admin: new Set(["cases:read", "cases:create", "sources:create", "findings:create", "findings:review"]),
+  analyst: new Set(["cases:read", "cases:create", "sources:create", "findings:create", "findings:review"]),
   reviewer: new Set(["cases:read"]),
 };
 
