@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1"],
+  transpilePackages: ["@aws-sdk/client-s3"],
   async redirects() {
     return [
       { source: "/cases", destination: "/dashboard", permanent: false },

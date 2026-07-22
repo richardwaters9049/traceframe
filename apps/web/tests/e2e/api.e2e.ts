@@ -20,6 +20,34 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     data: { title: `Concurrent synthetic ${runId}-${index}`, summary: "Synthetic concurrency verification record.", priority: "standard" },
   })));
   expect(creations.every((response) => response.status() === 201)).toBe(true);
+  const firstCreation = await creations[0].json() as { case: { id: string } };
+
+  const sourceUpload = await request.post(`/api/cases/${firstCreation.case.id}/sources`, {
+    headers: { Origin: origin },
+    multipart: {
+      file: {
+        name: "synthetic-source.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from(
+          "Synthetic Traceframe observation only.\nanalyst@example.test\n192.0.2.42\nhttps://example.test/source",
+        ),
+      },
+    },
+  });
+  expect(sourceUpload.status(), await sourceUpload.text()).toBe(202);
+  await expect.poll(async () => {
+    const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+    const body = await response.json() as { sources: Array<{ status: string; observations: Array<{ kind: string }> }> };
+    return { status: body.sources[0]?.status, kinds: body.sources[0]?.observations.map((item) => item.kind).sort() };
+  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["email", "ipv4", "url"] });
+
+  const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
+  expect(sourceWorkspaceResponse.status()).toBe(200);
+  const sourceWorkspace = await sourceWorkspaceResponse.json() as {
+    workspace: { verification: { status: string }; auditEvents: Array<{ action: string }> };
+  };
+  expect(sourceWorkspace.workspace.verification.status).toBe("verified");
+  expect(sourceWorkspace.workspace.auditEvents.some((event) => event.action === "source.uploaded")).toBe(true);
 
   const pageResponse = await request.get("/api/cases?limit=2");
   expect(pageResponse.status()).toBe(200);

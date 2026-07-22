@@ -6,6 +6,7 @@ from pathlib import Path
 import psycopg
 
 from traceframe_worker.config import Settings
+from traceframe_worker.ingestion import create_minio_client, process_one_job, recover_stale_jobs
 
 READY_FILE = Path("/tmp/traceframe-worker-ready")
 
@@ -34,9 +35,7 @@ def cleanup_expired_sessions(database_url: str) -> int:
     """Delete expired server-side sessions and return the affected row count."""
 
     with psycopg.connect(database_url, connect_timeout=5) as connection:
-        result = connection.execute(
-            "DELETE FROM sessions WHERE expires_at <= now() RETURNING id"
-        )
+        result = connection.execute("DELETE FROM sessions WHERE expires_at <= now() RETURNING id")
         return result.rowcount or 0
 
 
@@ -45,7 +44,13 @@ def main() -> None:
     database_url = str(settings.database_url)
 
     wait_for_database(database_url)
+    minio_client = create_minio_client(
+        str(settings.minio_endpoint), settings.minio_access_key, settings.minio_secret_key
+    )
+    recovered = recover_stale_jobs(database_url)
     logger.info("worker_ready pid=%s", os.getpid())
+    if recovered:
+        logger.warning("ingestion_leases_recovered count=%s", recovered)
 
     last_cleanup: float | None = None
     while True:
@@ -54,6 +59,9 @@ def main() -> None:
             deleted = cleanup_expired_sessions(database_url)
             logger.info("session_cleanup_complete deleted=%s", deleted)
             last_cleanup = current_time
+        job = process_one_job(database_url, minio_client, settings.minio_bucket, settings.worker_id)
+        if job:
+            logger.info("ingestion_job_attempted job_id=%s source_id=%s", job.id, job.source_id)
         READY_FILE.touch()
         time.sleep(settings.poll_interval_seconds)
 

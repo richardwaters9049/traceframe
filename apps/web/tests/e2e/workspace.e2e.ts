@@ -52,8 +52,10 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
   expect(caseRowCount).toBeLessThanOrEqual(5);
   if (caseRowCount > 0) {
     await caseRows.nth(0).click();
+    await page.getByRole("tab", { name: "analysis", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Analysis workspace" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sources" })).toBeDisabled();
+    await page.getByRole("tab", { name: /^sources(?: · \d+)?$/ }).click();
+    await expect(page.getByRole("heading", { name: "Source material" })).toBeVisible();
     await page.getByRole("button", { name: "Back to dashboard" }).click();
   }
 

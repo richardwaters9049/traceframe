@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.e2e.ts",
   fullyParallel: false,
+  // The integration projects share one stateful Compose stack. Serial workers
+  // keep local Next.js development compilation and audit-ledger writes
+  // deterministic across browser engines.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {

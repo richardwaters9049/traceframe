@@ -1,0 +1,4 @@
+Synthetic Traceframe observation only.
+Analyst contact: analyst@example.test
+Observed address: 192.0.2.42
+Reference: https://example.test/synthetic-record

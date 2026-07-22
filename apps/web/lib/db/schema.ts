@@ -63,22 +63,55 @@ export const cases = pgTable("cases", {
   check("cases_priority_check", sql`${table.priority} IN ('standard', 'high', 'critical')`),
 ]);
 
+export const sourceMaterial = pgTable("source_material", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  caseId: uuid("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+  objectKey: text("object_key").notNull().unique(),
+  originalFilename: text("original_filename").notNull(),
+  mediaType: text("media_type").notNull(),
+  sizeBytes: bigint("size_bytes", { mode: "number" }).notNull(),
+  sha256: text("sha256").notNull(),
+  uploadedBy: uuid("uploaded_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("queued"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+}, (table) => [index("source_material_case_created_idx").on(table.caseId, table.createdAt.desc(), table.id.desc())]);
+
 export const ingestionJobs = pgTable("ingestion_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
   caseId: uuid("case_id").references(() => cases.id, { onDelete: "cascade" }),
   sourceKey: text("source_key").notNull().unique(),
+  sourceId: uuid("source_id").references(() => sourceMaterial.id, { onDelete: "cascade" }),
   status: text("status").notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
   lastError: text("last_error"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-}, (table) => [
-  index("ingestion_jobs_status_created_at_id_idx").on(table.status, table.createdAt, table.id),
-]);
+  availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("ingestion_jobs_status_created_at_id_idx").on(table.status, table.createdAt, table.id)]);
+
+export const normalisedSources = pgTable("normalised_sources", {
+  sourceId: uuid("source_id").primaryKey().references(() => sourceMaterial.id, { onDelete: "cascade" }),
+  normalisedText: text("normalised_text").notNull(),
+  characterCount: integer("character_count").notNull(),
+  lineCount: integer("line_count").notNull(),
+  wordCount: integer("word_count").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const sourceObservations = pgTable("source_observations", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sourceId: uuid("source_id").notNull().references(() => sourceMaterial.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  value: text("value").notNull(),
+  occurrences: integer("occurrences").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("source_observations_source_idx").on(table.sourceId, table.kind, table.createdAt, table.id)]);
 
 export const auditChainHeads = pgTable("audit_chain_heads", {
   ledger: text("ledger").primaryKey(),

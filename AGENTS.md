@@ -57,7 +57,8 @@ local state, or animation requires it, and keep client boundaries focused.
 
 The completed application slice includes authentication, a responsive protected
 workspace, a paginated case register, on-demand case workspaces, case creation,
-and a globally verified audit ledger. Keep these current boundaries intact:
+a globally verified audit ledger, and a narrow end-to-end evidence-ingestion
+workflow. Keep these current boundaries intact:
 
 - The dashboard fetches a bounded 20-record summary page; it must not eagerly
   load every case workspace or audit history.
@@ -67,12 +68,19 @@ and a globally verified audit ledger. Keep these current boundaries intact:
 - `POST /api/cases` creates the case and its first global audit event atomically.
 - The global audit verifier reports typed `verified`, `broken`, or `unavailable`
   states. A case audit view is only a filtered view of that global ledger.
+- `POST /api/cases/:id/sources` accepts one validated UTF-8 TXT, LOG, CSV, or
+  JSON source up to 1 MiB and creates its provenance, job, and global audit event.
+- The Python worker claims jobs with `FOR UPDATE SKIP LOCKED`, verifies source
+  integrity, normalises text, retries safely, and derives counted email, URL,
+  and IPv4 observations.
+- The case workspace shows processing status, SHA-256 provenance, normalisation
+  counts, and derived observations without exposing original content.
 
-MinIO is provisioned and the ingestion-job schema exists, but source upload,
-durable job claiming/retries, evidence normalisation, provenance, and derived
-observations are planned product work. Do not describe those features as
-implemented, and do not treat their absence as unresolved debt from the
-19/07/2026 review.
+The ingestion slice is intentionally bounded. Large-file streaming, binary
+parsers, richer observation types, analyst findings, source retention controls,
+and production dead-letter operations are planned product work. Do not describe
+those features as implemented, and do not treat their absence as unresolved
+debt from the 19/07/2026 review.
 
 ## Security invariants
 
@@ -87,7 +95,8 @@ implemented, and do not treat their absence as unresolved debt from the
   normalised email lookup, and uniqueness on `lower(email)`.
 - Require explicit same-origin validation on every state-changing Route Handler.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
-  read/create cases, `reviewer` is read-only, and unknown roles fail closed.
+  read/create cases and upload sources, `reviewer` is read-only, and unknown
+  roles fail closed.
 - Preserve the atomic case-and-first-audit-event transaction. The transaction
   must lock the singleton `audit_chain_heads` row with `SELECT ... FOR UPDATE`,
   assign the next monotonic `ledger_sequence`, append the event, and advance the

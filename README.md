@@ -23,6 +23,13 @@ Traceframe currently provides a complete first vertical slice:
 - An in-context drawer for creating cases with validated titles, summaries, and
   priorities.
 - A cursor-paginated case register and on-demand individual case workspace.
+- Validated synthetic TXT, LOG, CSV, and JSON source uploads stored in MinIO.
+- Durable PostgreSQL ingestion jobs with safe worker claiming, retries, and
+  stale-lease recovery.
+- Deterministic UTF-8 normalisation with source integrity verification and
+  derived email, URL, and IPv4 observations.
+- Live source status, provenance, normalisation counts, and observations inside
+  the case workspace.
 - Atomic case and audit-event creation backed by a verified, monotonic global
   SHA-256 ledger.
 - Login throttling, same-origin mutation checks, request correlation, and
@@ -33,11 +40,12 @@ Traceframe currently provides a complete first vertical slice:
 - Docker health checks for the web application, PostgreSQL, MinIO, and Python
   worker.
 
-The Python worker currently establishes its database connection, publishes a
-health heartbeat, and performs scheduled expired-session cleanup. The ingestion
-job schema and MinIO service are in place, but source upload, object processing,
-and derived observations are planned work and are not yet exposed through the
-product interface.
+The Python worker publishes a health heartbeat, removes expired sessions, and
+processes one durable ingestion job at a time. The first ingestion slice is
+deliberately narrow: UTF-8 text-like files up to 1 MiB are integrity-checked,
+normalised, and scanned for email, URL, and IPv4 observations. Binary evidence,
+large-file streaming, richer parsers, and analyst-authored findings remain
+future work.
 
 ## Product flow
 
@@ -50,7 +58,10 @@ After signing in, the user stays within one protected workspace:
 5. Commit the case and its first audit event together in one database
    transaction.
 6. Select the new record to inspect its context and linked audit digest.
-7. Open the architecture view from the same component-driven workspace.
+7. Open **Sources**, upload a small synthetic text-like file, and follow its
+   queued, processing, and ready states without leaving the workspace.
+8. Review its SHA-256 provenance, normalisation counts, and derived indicators.
+9. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.
@@ -92,7 +103,7 @@ Next.js web + Route Handlers ---- PostgreSQL
 | `web` | Next.js interface, authentication, and Route Handlers | <http://127.0.0.1:3000> |
 | `db` | Users, sessions, cases, jobs, and audit events | Internal only |
 | `migrate` | Applies versioned schema migrations before dependent services | One-shot internal service |
-| `worker` | Background-processing runtime and health heartbeat | Internal only |
+| `worker` | Claims and processes durable source-ingestion jobs and maintains health | Internal only |
 | `minio` | S3-compatible source-material storage | Console: <http://127.0.0.1:9001> |
 | `seed` | Idempotently creates or updates the local demo user | One-shot internal service |
 
@@ -220,6 +231,8 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases` | Return cases for an authenticated user |
 | `POST` | `/api/cases` | Validate and create a case with its first audit event |
 | `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
+| `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
+| `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
 | `GET` | `/api/health` | Report web and database availability |
 
 ## Security and integrity choices
@@ -231,18 +244,27 @@ curl -fsS http://127.0.0.1:3000/api/health
   eight-hour expiry.
 - Protected pages and Route Handlers independently verify the database-backed
   session.
-- Zod validates untrusted login and case payloads at the server boundary.
+- Untrusted login, case, path, and multipart source input is validated at the
+  server boundary. Uploads are restricted to valid UTF-8 TXT, LOG, CSV, or JSON
+  files no larger than 1 MiB.
 - The audit actor is derived from the authenticated session, never from the
   request body.
 - Case creation and its initial audit event commit or roll back together.
+- Each source uses an opaque MinIO key; PostgreSQL records its original name,
+  media type, byte length, uploader, and SHA-256 digest. The worker verifies
+  length and digest again before processing.
+- A source record, durable job, and `source.uploaded` audit event are committed
+  atomically after object storage succeeds; the object is removed if that
+  transaction fails.
 - A locked PostgreSQL chain-head row assigns each global audit event a monotonic
   sequence and ensures concurrent writers extend one unambiguous head.
 - Server-side verification recalculates every canonical event digest and checks
   every sequence and predecessor link before the UI reports the ledger verified.
 - Mutating handlers reject cross-origin requests and all API responses include
   a request ID for correlation.
-- Workspace roles are fail-closed: `analyst` and `admin` can read/create cases;
-  `reviewer` is read-only; unknown roles receive no case capability.
+- Workspace roles are fail-closed: `analyst` and `admin` can read/create cases
+  and upload sources; `reviewer` is read-only; unknown roles receive no case
+  capability.
 - User-specific and case-specific dashboard data is dynamically rendered and is
   not cached across sessions.
 - The project contains synthetic information only.
@@ -286,8 +308,9 @@ automatic down-migrations are intentionally not provided.
 
 ## Next milestones
 
-- Upload synthetic source material to MinIO from a case workspace.
-- Create durable ingestion jobs in PostgreSQL.
-- Let the Python worker claim, process, retry, and complete those jobs safely.
-- Preserve provenance between source objects and derived observations.
-- Surface source provenance and derived observations in the case workspace.
+- Add larger-file streaming and carefully bounded binary-format parsers.
+- Expand observation types and promote derived observations into reviewable
+  analyst findings.
+- Add source lifecycle controls, retention policy, and object reconciliation.
+- Introduce production operations for dead-letter jobs, metrics, alerting, and
+  storage/database backup testing.

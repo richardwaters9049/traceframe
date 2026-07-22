@@ -10,11 +10,13 @@ import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import type { AuditVerification } from "@/lib/audit/verify";
 import type { AuditEventRecord, CaseCursorPage, CaseRecord } from "@/lib/cases/contracts";
 import { apiRequest } from "@/lib/http/client";
+import type { SourceRecord } from "@/lib/sources/contracts";
 
 export type CaseWorkspaceRecord = {
   case: CaseRecord;
   auditEvents: AuditEventRecord[];
   verification: AuditVerification;
+  sources: SourceRecord[];
 };
 
 export function WorkspaceContent({ initialPage, verification }: { initialPage: CaseCursorPage; verification: AuditVerification }) {

@@ -130,9 +130,16 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://traceframe:local-development-only@db:5432/traceframe}
       POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-5}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_BUCKET: ${MINIO_BUCKET:-case-source-material}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-traceframe}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-development-only}
+      WORKER_ID: ${WORKER_ID:-traceframe-worker}
     depends_on:
       migrate:
         condition: service_completed_successfully
+      minio:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
