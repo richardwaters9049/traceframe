@@ -86,11 +86,13 @@ pending proposals, and source content remain outside the print layout.
 
 ## Cross-source relationships
 
-The worker derives normalised domain observations alongside email, URL, and
-IPv4 values. Relationships are computed only when requested and only within one
-case: an indicator qualifies when it appears in at least two ready sources. The
-query returns at most 50 correlations and at most 10 source details per
-correlation, ordered deterministically by prevalence and occurrence count.
+The worker derives normalised domain and embedded SHA-256 observations alongside
+email, URL, and IPv4 values. SHA-256 extraction accepts only isolated, exact
+64-character hexadecimal values and normalises their casing. Relationships are
+computed only when requested and only within one case: an indicator qualifies
+when it appears in at least two ready sources. The query returns at most 50
+correlations and at most 10 source details per correlation, ordered
+deterministically by prevalence and occurrence count.
 
 `GET /api/cases/:id/correlations` requires the same authenticated read
 capability as the case workspace, disables response caching, and returns no

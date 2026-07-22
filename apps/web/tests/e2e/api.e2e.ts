@@ -15,6 +15,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect((await request.post("/api/cases", { headers: { Origin: origin }, data: { title: "x", priority: "unsupported" } })).status()).toBe(400);
 
   const runId = Date.now().toString(36);
+  const syntheticHash = "a".repeat(64);
   const creations = await Promise.all(Array.from({ length: 6 }, (_, index) => request.post("/api/cases", {
     headers: { Origin: origin },
     data: { title: `Concurrent synthetic ${runId}-${index}`, summary: "Synthetic concurrency verification record.", priority: "standard" },
@@ -29,7 +30,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
         name: "synthetic-source.txt",
         mimeType: "text/plain",
         buffer: Buffer.from(
-          "Synthetic Traceframe observation only.\nanalyst@example.test\n192.0.2.42\nhttps://example.test/source",
+          `Synthetic Traceframe observation only.\nanalyst@example.test\n192.0.2.42\nhttps://example.test/source\n${syntheticHash}`,
         ),
       },
     },
@@ -39,7 +40,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
     const body = await response.json() as { sources: Array<{ status: string; observations: Array<{ kind: string }> }> };
     return { status: body.sources[0]?.status, kinds: body.sources[0]?.observations.map((item) => item.kind).sort() };
-  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["domain", "email", "ipv4", "url"] });
+  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["domain", "email", "ipv4", "sha256", "url"] });
 
   const sourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
   const sourcesBody = await sourcesResponse.json() as {
@@ -86,7 +87,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     proposed: 0,
     confirmed: 1,
     dismissed: 0,
-    byKind: { email: 0, url: 0, ipv4: 1, domain: 0 },
+    byKind: { email: 0, url: 0, ipv4: 1, domain: 0, sha256: 0 },
   });
 
   const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
@@ -149,7 +150,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
         name: "synthetic-related-source.log",
         mimeType: "text/plain",
         buffer: Buffer.from(
-          "Related synthetic record only.\nresponder@example.test\n192.0.2.42\nexample.test",
+          `Related synthetic record only.\nresponder@example.test\n192.0.2.42\nexample.test\n${syntheticHash}`,
         ),
       },
     },
@@ -170,9 +171,9 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     limits: { correlations: number; sourcesPerCorrelation: number };
   };
   expect(correlationCollection.summary).toEqual({
-    total: 2,
-    sourceLinks: 4,
-    byKind: { email: 0, url: 0, ipv4: 1, domain: 1 },
+    total: 3,
+    sourceLinks: 6,
+    byKind: { email: 0, url: 0, ipv4: 1, domain: 1, sha256: 1 },
   });
   expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
     kind: "domain",
@@ -184,6 +185,12 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
     kind: "ipv4",
     value: "192.0.2.42",
+    sourceCount: 2,
+    totalOccurrences: 2,
+  }));
+  expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
+    kind: "sha256",
+    value: syntheticHash,
     sourceCount: 2,
     totalOccurrences: 2,
   }));

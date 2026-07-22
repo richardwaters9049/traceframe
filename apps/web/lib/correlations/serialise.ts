@@ -47,6 +47,7 @@ export function serialiseCorrelations(rows: CorrelationRow[]): CaseCorrelationCo
     url: 0,
     ipv4: 0,
     domain: 0,
+    sha256: 0,
   };
   for (const correlation of correlations) byKind[correlation.kind] += 1;
 

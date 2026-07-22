@@ -32,4 +32,6 @@ Case-level finding totals and responsive lifecycle and indicator filters now
 make those decisions easier to review. Reviewed findings can now be exported as
 safe CSV or JSON, with a focused printable case summary for hand-off. Domain
 observations and a bounded, on-demand Relationships view now reveal repeated
-indicators across ready sources without exposing their content.
+indicators across ready sources without exposing their content. Strictly
+validated embedded SHA-256 values now participate in the same finding and
+correlation workflow.

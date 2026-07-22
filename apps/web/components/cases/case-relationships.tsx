@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 
 import type { CaseCorrelationCollection } from "@/lib/correlations/contracts";
 import { apiRequest } from "@/lib/http/client";
+import { observationKindLabel } from "@/lib/sources/contracts";
 
 export function CaseRelationships({ caseId }: { caseId: string }) {
   const [requestVersion, setRequestVersion] = useState(0);
@@ -51,7 +52,7 @@ export function CaseRelationships({ caseId }: { caseId: string }) {
         <div className="mt-5 space-y-3">
           {!collection.correlations.length ? <div className="grid min-h-56 place-items-center rounded-2xl border border-dashed border-white/[0.075] bg-white/[0.012] p-8 text-center"><div><Network className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No repeated indicators yet</p><p className="ui-meta mt-2 max-w-md text-[#AAB3C1]">A relationship appears when the same normalised indicator is observed in at least two ready sources.</p></div></div> : null}
           {collection.correlations.map((correlation) => <article key={`${correlation.kind}:${correlation.value}`} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-eyebrow text-[#8F99AA]">{correlation.kind}</p><p className="ui-section-title mt-1 break-all">{correlation.value}</p></div><span className="ui-eyebrow inline-flex w-fit shrink-0 rounded-full bg-[#58D6C7]/10 px-2.5 py-1 text-[#76E2D5] ring-1 ring-inset ring-[#58D6C7]/20">{correlation.sourceCount} sources · {correlation.totalOccurrences} hits</span></div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-eyebrow text-[#8F99AA]">{observationKindLabel(correlation.kind)}</p><p className="ui-section-title mt-1 break-all">{correlation.value}</p></div><span className="ui-eyebrow inline-flex w-fit shrink-0 rounded-full bg-[#58D6C7]/10 px-2.5 py-1 text-[#76E2D5] ring-1 ring-inset ring-[#58D6C7]/20">{correlation.sourceCount} sources · {correlation.totalOccurrences} hits</span></div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">{correlation.sources.map((source) => <div key={source.sourceId} className="min-w-0 rounded-xl bg-white/[0.025] px-3 py-2.5"><p className="ui-meta truncate text-[#C1C8D2]" title={source.sourceFilename}>{source.sourceFilename}</p><p className="ui-eyebrow mt-1 text-[#7F8A9B]">{source.occurrences} occurrence{source.occurrences === 1 ? "" : "s"}</p></div>)}</div>
             {correlation.sourcesTruncated ? <p className="ui-meta mt-3 text-[#8F99AA]">Showing the first {collection.limits.sourcesPerCorrelation} source records.</p> : null}
           </article>)}

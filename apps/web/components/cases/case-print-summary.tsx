@@ -1,5 +1,6 @@
 import type { CaseRecord } from "@/lib/cases/contracts";
 import type { FindingRecord, FindingSummary, ReviewedFindingRecord } from "@/lib/findings/contracts";
+import { observationKindLabel } from "@/lib/sources/contracts";
 
 function printableDate(value: string) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -37,7 +38,7 @@ export function CasePrintSummary({
       <div className="case-print-section-heading"><h2>Reviewed findings</h2><p>{summary.confirmed} confirmed · {summary.dismissed} dismissed</p></div>
       {reviewedFindings.length ? reviewedFindings.map((finding) => (
         <article key={finding.id} className="case-print-finding">
-          <div className="case-print-finding-heading"><div><p>{finding.kind.toUpperCase()} · {finding.sourceFilename}</p><h3>{finding.value}{finding.occurrences > 1 ? ` ×${finding.occurrences}` : ""}</h3></div><strong>{finding.status}</strong></div>
+          <div className="case-print-finding-heading"><div><p>{observationKindLabel(finding.kind)} · {finding.sourceFilename}</p><h3>{finding.value}{finding.occurrences > 1 ? ` ×${finding.occurrences}` : ""}</h3></div><strong>{finding.status}</strong></div>
           <dl>
             <div><dt>Analyst note</dt><dd>{finding.analystNote}</dd></div>
             <div><dt>Review rationale</dt><dd>{finding.reviewRationale}</dd></div>

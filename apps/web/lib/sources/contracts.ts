@@ -2,8 +2,15 @@ import { z } from "zod";
 
 export const MAX_SOURCE_BYTES = 1024 * 1024;
 export const sourceMediaTypes = ["text/plain", "text/csv", "application/json"] as const;
-export const observationKinds = ["email", "url", "ipv4", "domain"] as const;
+export const observationKinds = ["email", "url", "ipv4", "domain", "sha256"] as const;
 export type ObservationKind = (typeof observationKinds)[number];
+
+export function observationKindLabel(kind: ObservationKind) {
+  if (kind === "ipv4") return "IPv4";
+  if (kind === "url") return "URL";
+  if (kind === "sha256") return "SHA-256";
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
 
 const extensionByMediaType: Record<(typeof sourceMediaTypes)[number], ReadonlySet<string>> = {
   "text/plain": new Set(["txt", "log"]),

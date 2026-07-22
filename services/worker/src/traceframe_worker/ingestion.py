@@ -20,6 +20,7 @@ DOMAIN_PATTERN = re.compile(
     r"(?<![A-Z0-9-])(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,63}(?![A-Z0-9-])",
     re.IGNORECASE,
 )
+SHA256_PATTERN = re.compile(r"(?<![A-F0-9])[A-F0-9]{64}(?![A-F0-9])", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,7 @@ def derive_observations(text: str) -> list[tuple[str, str, int]]:
     )
     values.extend(("email", match.lower()) for match in EMAIL_PATTERN.findall(text))
     values.extend(("domain", match.lower()) for match in DOMAIN_PATTERN.findall(text))
+    values.extend(("sha256", match.lower()) for match in SHA256_PATTERN.findall(text))
     values.extend(
         ("ipv4", match)
         for match in IPV4_PATTERN.findall(text)

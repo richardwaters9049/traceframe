@@ -72,7 +72,7 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
   JSON source up to 1 MiB and creates its provenance, job, and global audit event.
 - The Python worker claims jobs with `FOR UPDATE SKIP LOCKED`, verifies source
   integrity, normalises text, retries safely, and derives counted email, URL,
-  IPv4, and domain observations.
+  IPv4, domain, and embedded SHA-256 observations.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
 - One derived observation may be promoted into one finding. Findings begin as
@@ -89,6 +89,9 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
 - Cross-source relationships load on demand and include only indicators found
   in at least two ready sources within the selected case. Preserve the limits
   of 50 correlations and 10 displayed source records per correlation.
+- SHA-256 observations represent isolated 64-character hexadecimal values found
+  in normalised source text. Keep strict boundaries and lowercase normalisation;
+  do not classify partial or longer hexadecimal strings as hashes.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
 parsers, additional observation types, source retention controls, and
