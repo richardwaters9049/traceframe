@@ -33,3 +33,11 @@ export type FindingRecord = {
   updatedAt: string;
   reviewedAt: string | null;
 };
+
+export type FindingSummary = {
+  total: number;
+  proposed: number;
+  confirmed: number;
+  dismissed: number;
+  byKind: { email: number; url: number; ipv4: number };
+};

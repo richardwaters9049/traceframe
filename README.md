@@ -32,6 +32,8 @@ Traceframe currently provides a complete first vertical slice:
   the case workspace.
 - Reviewable analyst findings that promote individual observations into
   proposed, confirmed, or dismissed decisions with recorded rationale.
+- Server-derived case finding totals with responsive status and indicator-type
+  filters that remain inside the workspace state.
 - Atomic case and audit-event creation backed by a verified, monotonic global
   SHA-256 ledger.
 - Login throttling, same-origin mutation checks, request correlation, and
@@ -237,7 +239,7 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
 | `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
 | `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
-| `GET` | `/api/cases/:id/findings` | Return the case's reviewable analyst findings |
+| `GET` | `/api/cases/:id/findings` | Return findings with case-level lifecycle and indicator summaries |
 | `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
 | `PATCH` | `/api/cases/:id/findings/:findingId` | Confirm or dismiss a proposed finding with rationale |
 | `GET` | `/api/health` | Report web and database availability |
@@ -320,7 +322,7 @@ automatic down-migrations are intentionally not provided.
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
 - Expand observation types and add bounded cross-source correlation.
-- Add finding filters, case-level summaries, and reviewed-finding exports.
+- Add safe reviewed-finding exports and printable case summaries.
 - Add source lifecycle controls, retention policy, and object reconciliation.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.

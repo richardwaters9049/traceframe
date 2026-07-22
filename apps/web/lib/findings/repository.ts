@@ -5,6 +5,7 @@ import type postgres from "postgres";
 import { createAuditHash } from "@/lib/audit/hash";
 import { getDatabaseClient } from "@/lib/db/client";
 import type { FindingRecord, ProposeFindingInput, ReviewFindingInput } from "@/lib/findings/contracts";
+import { summariseFindings } from "@/lib/findings/summary";
 
 type FindingRow = {
   id: string; case_id: string; observation_id: string; source_id: string; original_filename: string;
@@ -68,7 +69,7 @@ async function appendFindingAuditEvent(
     WHERE ledger = 'global'`;
 }
 
-export async function listCaseFindings(caseId: string): Promise<FindingRecord[]> {
+export async function getCaseFindings(caseId: string) {
   const sql = getDatabaseClient();
   const rows = await sql<FindingRow[]>`
     SELECT f.id, f.case_id, f.observation_id, o.source_id, s.original_filename, o.kind, o.value,
@@ -81,7 +82,8 @@ export async function listCaseFindings(caseId: string): Promise<FindingRecord[]>
     LEFT JOIN users reviewer ON reviewer.id = f.reviewed_by
     WHERE f.case_id = ${caseId}
     ORDER BY f.created_at DESC, f.id DESC`;
-  return rows.map(serialiseFinding);
+  const findings = rows.map(serialiseFinding);
+  return { findings, summary: summariseFindings(findings) };
 }
 
 export async function proposeFinding(

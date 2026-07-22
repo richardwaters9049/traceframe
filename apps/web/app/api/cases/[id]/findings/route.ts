@@ -2,7 +2,7 @@ import { can } from "@/lib/auth/authorization";
 import { getCurrentUser } from "@/lib/auth/session";
 import { caseIdSchema } from "@/lib/sources/contracts";
 import { proposeFindingSchema } from "@/lib/findings/contracts";
-import { listCaseFindings, proposeFinding } from "@/lib/findings/repository";
+import { getCaseFindings, proposeFinding } from "@/lib/findings/repository";
 import { getRequestId, isSameOriginRequest, jsonResponse, requestLog } from "@/lib/http/security";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +13,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const parsedId = caseIdSchema.safeParse((await params).id);
   if (!parsedId.success) return jsonResponse({ error: "Case not found." }, 404, requestId);
   try {
-    return jsonResponse({ findings: await listCaseFindings(parsedId.data) }, 200, requestId);
+    return jsonResponse(await getCaseFindings(parsedId.data), 200, requestId);
   } catch (error) {
     requestLog("error", "findings.list.error", requestId, { error: error instanceof Error ? error.name : "unknown" });
     return jsonResponse({ error: "Findings could not be loaded." }, 500, requestId);

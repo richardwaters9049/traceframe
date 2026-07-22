@@ -58,6 +58,7 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await expect(page.getByRole("heading", { name: "Source material" })).toBeVisible();
     await page.getByRole("tab", { name: /^findings(?: · \d+)?$/ }).click();
     await expect(page.getByRole("heading", { name: "Analyst findings" })).toBeVisible();
+    await expect(page.getByLabel("Finding summary")).toBeVisible();
     await page.getByRole("button", { name: "Back to dashboard" }).click();
   }
 

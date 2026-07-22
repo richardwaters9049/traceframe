@@ -9,7 +9,7 @@ import { DashboardWorkspace } from "@/components/cases/dashboard-workspace";
 import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import type { AuditVerification } from "@/lib/audit/verify";
 import type { AuditEventRecord, CaseCursorPage, CaseRecord } from "@/lib/cases/contracts";
-import type { FindingRecord } from "@/lib/findings/contracts";
+import type { FindingRecord, FindingSummary } from "@/lib/findings/contracts";
 import { apiRequest } from "@/lib/http/client";
 import type { SourceRecord } from "@/lib/sources/contracts";
 
@@ -19,6 +19,7 @@ export type CaseWorkspaceRecord = {
   verification: AuditVerification;
   sources: SourceRecord[];
   findings: FindingRecord[];
+  findingSummary: FindingSummary;
   capabilities: { canCreateFindings: boolean; canReviewFindings: boolean };
 };
 

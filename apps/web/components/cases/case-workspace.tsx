@@ -14,6 +14,10 @@ import { apiRequest } from "@/lib/http/client";
 import type { SourceRecord } from "@/lib/sources/contracts";
 
 type WorkspaceTab = "analysis" | "sources" | "findings";
+type FindingStatusFilter = "all" | FindingRecord["status"];
+type FindingKindFilter = "all" | FindingRecord["kind"];
+
+const findingStatusFilters: FindingStatusFilter[] = ["all", "proposed", "confirmed", "dismissed"];
 
 function statusStyles(status: SourceRecord["status"]) {
   if (status === "ready") return "bg-[#58D6C7]/10 text-[#76E2D5] ring-[#58D6C7]/20";
@@ -38,6 +42,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const [tab, setTab] = useState<WorkspaceTab>(workspace.sources.length ? "sources" : "analysis");
   const [sources, setSources] = useState(workspace.sources);
   const [findings, setFindings] = useState(workspace.findings);
+  const [findingSummary, setFindingSummary] = useState(workspace.findingSummary);
   const [auditEvents, setAuditEvents] = useState(workspace.auditEvents);
   const [verification, setVerification] = useState(workspace.verification);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -46,6 +51,8 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const [analystNote, setAnalystNote] = useState("");
   const [reviewRationales, setReviewRationales] = useState<Record<string, string>>({});
   const [findingAction, setFindingAction] = useState<string | null>(null);
+  const [findingStatusFilter, setFindingStatusFilter] = useState<FindingStatusFilter>("all");
+  const [findingKindFilter, setFindingKindFilter] = useState<FindingKindFilter>("all");
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { case: record } = workspace;
@@ -57,12 +64,16 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const observations = sources.flatMap((source) => source.observations.map((observation) => ({ ...observation, sourceFilename: source.originalFilename })));
   const promotedObservationIds = new Set(findings.map((finding) => finding.observationId));
   const availableObservations = observations.filter((observation) => !promotedObservationIds.has(observation.id));
+  const filteredFindings = findings.filter((finding) =>
+    (findingStatusFilter === "all" || finding.status === findingStatusFilter)
+    && (findingKindFilter === "all" || finding.kind === findingKindFilter));
 
   async function refreshWorkspace() {
     const refreshed = await apiRequest<{ workspace: CaseWorkspaceRecord }>(`/api/cases/${encodeURIComponent(record.id)}`);
     if (!refreshed.ok) return false;
     setSources(refreshed.data.workspace.sources);
     setFindings(refreshed.data.workspace.findings);
+    setFindingSummary(refreshed.data.workspace.findingSummary);
     setAuditEvents(refreshed.data.workspace.auditEvents);
     setVerification(refreshed.data.workspace.verification);
     return true;
@@ -174,6 +185,15 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
             <motion.div key="findings" role="tabpanel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="min-h-[28rem] min-w-0 rounded-[1.5rem] border border-white/[0.07] bg-navigation p-5 sm:p-7">
               <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><SearchCheck className="size-5" /></span><div><h2 className="ui-section-title">Analyst findings</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Machine observed · human reviewed</p></div></div>
 
+              <div aria-label="Finding summary" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  ["Total", findingSummary.total],
+                  ["Proposed", findingSummary.proposed],
+                  ["Confirmed", findingSummary.confirmed],
+                  ["Dismissed", findingSummary.dismissed],
+                ] as const).map(([label, value]) => <div key={label} className="rounded-xl border border-white/[0.055] bg-white/[0.02] p-3"><p className="ui-eyebrow text-[#7F8A9B]">{label}</p><p className="ui-section-title mt-1 tabular-nums">{value}</p></div>)}
+              </div>
+
               {workspace.capabilities.canCreateFindings && availableObservations.length ? (
                 <form onSubmit={proposeObservation} className="mt-6 rounded-2xl border border-primary/20 bg-primary/[0.035] p-4 sm:p-5">
                   <label className="ui-label block text-[#DDE2EA]" htmlFor="finding-observation">Promote an observation</label>
@@ -191,10 +211,16 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
               {workspace.capabilities.canCreateFindings && observations.length > 0 && availableObservations.length === 0 ? <p className="ui-meta mt-6 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-[#AAB3C1]">Every derived observation has already been promoted.</p> : null}
               {message ? <p role={message.tone === "error" ? "alert" : "status"} className={`ui-meta mt-4 flex items-center gap-2 ${message.tone === "error" ? "text-[#FF9BA7]" : "text-[#76E2D5]"}`}>{message.tone === "error" ? <AlertTriangle className="size-4" /> : <Check className="size-4" />}{message.text}</p> : null}
 
+              {findings.length ? <div className="mt-5 rounded-2xl border border-white/[0.065] bg-white/[0.012] p-3 sm:p-4"><div className="flex flex-col gap-3"><div role="group" aria-label="Filter findings by status" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{findingStatusFilters.map((status) => {
+                const count = status === "all" ? findingSummary.total : findingSummary[status];
+                return <button key={status} type="button" aria-pressed={findingStatusFilter === status} onClick={() => setFindingStatusFilter(status)} className={`ui-meta cursor-pointer rounded-lg px-2.5 py-1.5 capitalize ring-1 ring-inset transition ${findingStatusFilter === status ? "bg-primary/15 text-[#B7C0FF] ring-primary/30" : "bg-white/[0.025] text-[#AAB3C1] ring-white/[0.07] hover:text-white"}`}>{status} · {count}</button>;
+              })}</div><div className="flex items-center justify-end gap-3"><label htmlFor="finding-kind-filter" className="ui-meta shrink-0 text-[#8F99AA]">Indicator</label><select id="finding-kind-filter" value={findingKindFilter} onChange={(event) => setFindingKindFilter(event.target.value as FindingKindFilter)} className="ui-meta min-w-32 cursor-pointer rounded-lg border border-white/[0.08] bg-[#0D1118] px-2.5 py-2 text-[#D3D9E2] outline-none focus:border-primary/45"><option value="all">All types</option><option value="email">Email · {findingSummary.byKind.email}</option><option value="url">URL · {findingSummary.byKind.url}</option><option value="ipv4">IPv4 · {findingSummary.byKind.ipv4}</option></select></div></div><p aria-live="polite" className="ui-meta mt-3 text-[#8F99AA]">Showing {filteredFindings.length} of {findingSummary.total} findings</p></div> : null}
+
               <div className="mt-5 space-y-3">
                 {!observations.length ? <div className="grid min-h-48 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.012] p-8 text-center"><div><SearchCheck className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No observations to review</p><p className="ui-meta mt-2 text-[#AAB3C1]">Process a synthetic source before creating an analyst finding.</p></div></div> : null}
                 {observations.length > 0 && !findings.length ? <div className="rounded-2xl border border-dashed border-white/[0.075] bg-white/[0.012] p-6 text-center"><p className="ui-section-title">No findings proposed</p><p className="ui-meta mt-2 text-[#AAB3C1]">Promote a machine-derived observation and record your reasoning.</p></div> : null}
-                {findings.map((finding) => <article key={finding.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5">
+                {findings.length > 0 && !filteredFindings.length ? <div className="rounded-2xl border border-dashed border-white/[0.075] bg-white/[0.012] p-6 text-center"><p className="ui-section-title">No matching findings</p><p className="ui-meta mt-2 text-[#AAB3C1]">Adjust the status or indicator filter to see other decisions.</p></div> : null}
+                {filteredFindings.map((finding) => <article key={finding.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-eyebrow text-[#8F99AA]">{finding.kind} · {finding.sourceFilename}</p><p className="ui-section-title mt-1 break-all">{finding.value}{finding.occurrences > 1 ? ` ×${finding.occurrences}` : ""}</p></div><span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${finding.status === "confirmed" ? "bg-[#58D6C7]/10 text-[#76E2D5] ring-[#58D6C7]/20" : finding.status === "dismissed" ? "bg-white/[0.045] text-[#AEB7C5] ring-white/[0.08]" : "bg-primary/10 text-[#9AA7FF] ring-primary/20"}`}>{finding.status === "confirmed" ? <CircleCheckBig className="size-3.5" /> : finding.status === "dismissed" ? <CircleX className="size-3.5" /> : <LoaderCircle className="size-3.5" />}{finding.status}</span></div>
                   <div className="mt-4 rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Analyst note · {finding.createdBy}</p><p className="ui-meta mt-2 whitespace-pre-wrap text-[#C1C8D2]">{finding.analystNote}</p></div>
                   {finding.status === "proposed" && workspace.capabilities.canReviewFindings ? <div className="mt-4"><label htmlFor={`rationale-${finding.id}`} className="ui-label text-[#DDE2EA]">Review rationale</label><textarea id={`rationale-${finding.id}`} value={reviewRationales[finding.id] ?? ""} onChange={(event) => setReviewRationales((current) => ({ ...current, [finding.id]: event.target.value }))} maxLength={500} rows={2} placeholder="Record why this finding should be confirmed or dismissed." className="ui-meta mt-2 w-full resize-y rounded-xl border border-white/[0.09] bg-[#0D1118] px-3 py-3 text-[#D8DEE7] outline-none transition placeholder:text-[#768091] focus:border-primary/50" /><div className="mt-3 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => void decideFinding(finding, "dismissed")} disabled={(reviewRationales[finding.id]?.trim().length ?? 0) < 3 || findingAction !== null} className="ui-label inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/[0.1] px-3.5 py-2.5 text-[#C3CAD4] transition hover:border-[#FF7D8D]/30 hover:text-[#FF9BA7] disabled:cursor-not-allowed disabled:opacity-45"><CircleX className="size-4" />Dismiss</button><button type="button" onClick={() => void decideFinding(finding, "confirmed")} disabled={(reviewRationales[finding.id]?.trim().length ?? 0) < 3 || findingAction !== null} className="ui-label inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#58D6C7] px-3.5 py-2.5 text-[#07110F] transition hover:bg-[#76E2D5] disabled:cursor-not-allowed disabled:opacity-45"><CircleCheckBig className="size-4" />Confirm</button></div></div> : null}

@@ -80,10 +80,13 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
   required rationale.
 - Finding proposals and decisions update the finding and append their global
   audit event atomically. Notes and rationale stay out of logs and audit metadata.
+- Case finding summaries are derived server-side from the returned finding
+  collection. Status and indicator filters remain local workspace state and do
+  not use routes, query strings, or extra database requests.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
 parsers, richer observation types, cross-source correlation, finding exports,
-source retention controls, and production dead-letter operations are planned
+printable case summaries, source retention controls, and production dead-letter operations are planned
 product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.

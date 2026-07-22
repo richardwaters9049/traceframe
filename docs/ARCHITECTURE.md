@@ -66,6 +66,13 @@ in one transaction while holding the global audit-chain head lock. Analyst notes
 and review rationale stay in the finding record rather than logs or immutable
 audit metadata.
 
+Finding collection responses include totals by lifecycle state and indicator
+kind, derived from the same authoritative records returned by the repository.
+The case workspace uses those server-derived totals for compact summary cards,
+then filters the already bounded case collection in component state. Filter
+choices are intentionally not encoded in routes or query strings and do not
+trigger additional database requests.
+
 ## Case queries and workspace state
 
 The dashboard server component fetches a bounded 20-record summary page using a

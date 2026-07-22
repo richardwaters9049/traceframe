@@ -28,3 +28,5 @@ and IPv4 observations, and linked audit events. Documentation and automated
 coverage were updated, with web, worker, cross-browser, reflow, and dependency
 checks passing. Derived observations can now be promoted into audited analyst
 findings and confirmed or dismissed with a recorded rationale.
+Case-level finding totals and responsive lifecycle and indicator filters now
+make those decisions easier to review.

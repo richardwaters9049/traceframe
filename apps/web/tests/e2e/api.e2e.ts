@@ -74,6 +74,21 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     data: { status: "dismissed", rationale: "Attempting a second review decision." },
   })).status()).toBe(409);
 
+  const findingCollectionResponse = await request.get(`/api/cases/${firstCreation.case.id}/findings`);
+  expect(findingCollectionResponse.status()).toBe(200);
+  const findingCollection = await findingCollectionResponse.json() as {
+    findings: Array<{ id: string; status: string }>;
+    summary: { total: number; proposed: number; confirmed: number; dismissed: number; byKind: Record<string, number> };
+  };
+  expect(findingCollection.findings).toContainEqual(expect.objectContaining({ id: proposal.findingId, status: "confirmed" }));
+  expect(findingCollection.summary).toEqual({
+    total: 1,
+    proposed: 0,
+    confirmed: 1,
+    dismissed: 0,
+    byKind: { email: 0, url: 0, ipv4: 1 },
+  });
+
   const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
   expect(sourceWorkspaceResponse.status()).toBe(200);
   const sourceWorkspace = await sourceWorkspaceResponse.json() as {
@@ -81,6 +96,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
       verification: { status: string };
       auditEvents: Array<{ action: string }>;
       findings: Array<{ id: string; status: string; analystNote: string; reviewRationale: string | null }>;
+      findingSummary: { total: number; proposed: number; confirmed: number; dismissed: number };
     };
   };
   expect(sourceWorkspace.workspace.verification.status).toBe("verified");
@@ -92,6 +108,9 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     status: "confirmed",
     analystNote: "Synthetic address requires analyst review.",
     reviewRationale: "Confirmed as relevant synthetic evidence.",
+  }));
+  expect(sourceWorkspace.workspace.findingSummary).toEqual(expect.objectContaining({
+    total: 1, proposed: 0, confirmed: 1, dismissed: 0,
   }));
 
   const pageResponse = await request.get("/api/cases?limit=2");
