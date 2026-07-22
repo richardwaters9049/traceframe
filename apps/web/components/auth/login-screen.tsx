@@ -263,7 +263,7 @@ export function LoginScreen({ skipIntro = false }: { skipIntro?: boolean }) {
                   </button>
                 </div>
               </div>
-              <Button type="submit" disabled={isSubmitting || isEnteringWorkspace} className="h-11 w-full justify-center rounded-xl bg-primary px-4 text-sm font-semibold tracking-[0.035em] text-background hover:bg-primary-hover lg:w-36">
+              <Button type="submit" disabled={isSubmitting || isEnteringWorkspace} className="h-11 w-full justify-center rounded-xl bg-primary px-4 text-sm font-semibold tracking-[0.035em] text-background hover:bg-primary-hover lg:w-36 hover:text-white">
                 {isSubmitting ? <><LoaderCircle className="animate-spin" /> Checking…</> : <>Continue <ArrowRight /></>}
               </Button>
             </form>

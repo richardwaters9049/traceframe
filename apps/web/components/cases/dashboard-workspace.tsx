@@ -37,7 +37,7 @@ export function DashboardWorkspace({ initialPage, verification }: { initialPage:
             type="button"
             data-testid="new-case-primary"
             onClick={(event) => openNewCase(event.currentTarget)}
-            className="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold tracking-[0.03em] text-background transition-colors hover:bg-primary-hover"
+            className="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold tracking-[0.03em] text-background transition-colors hover:bg-primary-hover hover:text-white"
           >
             <Plus className="size-4" aria-hidden="true" />
             New case
