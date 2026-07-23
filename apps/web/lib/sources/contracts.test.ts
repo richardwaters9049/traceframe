@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { validateSourceUpload } from "@/lib/sources/contracts";
+import {
+  observationKindLabel,
+  observationKinds,
+  validateSourceUpload,
+} from "@/lib/sources/contracts";
 
 describe("validateSourceUpload", () => {
   test("accepts and sanitises a small UTF-8 text source", () => {
@@ -14,5 +18,10 @@ describe("validateSourceUpload", () => {
     expect(() => validateSourceUpload({ name: "source.exe", type: "application/octet-stream", size: executable.length, bytes: executable })).toThrow("INVALID_EXTENSION");
     const malformed = new TextEncoder().encode("{not-json}");
     expect(() => validateSourceUpload({ name: "source.json", type: "application/json", size: malformed.length, bytes: malformed })).toThrow("INVALID_JSON");
+  });
+
+  test("exposes the bounded user-agent observation kind with a readable label", () => {
+    expect(observationKinds).toContain("user_agent");
+    expect(observationKindLabel("user_agent")).toBe("User agent");
   });
 });

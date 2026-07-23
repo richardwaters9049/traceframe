@@ -50,3 +50,5 @@ Added audited original-source disposal with durable retries and preserved
 provenance, observations, findings, and retention status.
 Added verified reviewed-finding ZIP bundles with hashed provenance manifests for
 controlled hand-off without source content.
+Added bounded user-agent observations across ingestion, findings, exports, and
+cross-source relationships.
