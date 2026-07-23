@@ -62,6 +62,10 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   });
   expect(proposalResponse.status()).toBe(201);
   const proposal = await proposalResponse.json() as { findingId: string };
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: origin },
+    data: { status: "closed" },
+  })).status()).toBe(409);
   expect((await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
     headers: { Origin: origin },
     data: { observationId, note: "Duplicate proposal." },
@@ -145,6 +149,67 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     status: "confirmed",
     reviewRationale: "Confirmed as relevant synthetic evidence.",
   }));
+
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: "https://untrusted.invalid" },
+    data: { status: "closed" },
+  })).status()).toBe(403);
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: origin },
+    data: { status: "archived" },
+  })).status()).toBe(400);
+
+  const closeResponse = await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: origin },
+    data: { status: "closed" },
+  });
+  expect(closeResponse.status()).toBe(200);
+  expect(await closeResponse.json()).toEqual(expect.objectContaining({
+    case: expect.objectContaining({ id: firstCreation.case.id, status: "closed" }),
+  }));
+  expect((await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: origin },
+    data: { status: "closed" },
+  })).status()).toBe(409);
+
+  expect((await request.post(`/api/cases/${firstCreation.case.id}/sources`, {
+    headers: { Origin: origin },
+    multipart: {
+      file: {
+        name: "closed-case-source.txt",
+        mimeType: "text/plain",
+        buffer: Buffer.from("Synthetic source rejected because the case is closed."),
+      },
+    },
+  })).status()).toBe(409);
+  const emailObservationId = sourcesBody.sources[0]?.observations.find((item) => item.kind === "email")?.id;
+  expect(emailObservationId).toBeTruthy();
+  expect((await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
+    headers: { Origin: origin },
+    data: { observationId: emailObservationId, note: "Closed cases must reject proposals." },
+  })).status()).toBe(409);
+
+  const closedWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
+  expect(closedWorkspaceResponse.status()).toBe(200);
+  const closedWorkspace = await closedWorkspaceResponse.json() as {
+    workspace: { case: { status: string }; verification: { status: string }; auditEvents: Array<{ action: string }> };
+  };
+  expect(closedWorkspace.workspace.case.status).toBe("closed");
+  expect(closedWorkspace.workspace.verification.status).toBe("verified");
+  expect(closedWorkspace.workspace.auditEvents.some((event) => event.action === "case.closed")).toBe(true);
+
+  const reopenResponse = await request.patch(`/api/cases/${firstCreation.case.id}`, {
+    headers: { Origin: origin },
+    data: { status: "open" },
+  });
+  expect(reopenResponse.status()).toBe(200);
+  const reopenedWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
+  const reopenedWorkspace = await reopenedWorkspaceResponse.json() as {
+    workspace: { case: { status: string }; verification: { status: string }; auditEvents: Array<{ action: string }> };
+  };
+  expect(reopenedWorkspace.workspace.case.status).toBe("open");
+  expect(reopenedWorkspace.workspace.verification.status).toBe("verified");
+  expect(reopenedWorkspace.workspace.auditEvents.some((event) => event.action === "case.reopened")).toBe(true);
 
   const secondSourceUpload = await request.post(`/api/cases/${firstCreation.case.id}/sources`, {
     headers: { Origin: origin },

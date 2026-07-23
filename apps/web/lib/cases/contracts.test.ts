@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createCaseSchema } from "@/lib/cases/contracts";
+import { createCaseSchema, updateCaseStatusSchema } from "@/lib/cases/contracts";
 
 describe("createCaseSchema", () => {
   test("normalises valid case details", () => {
@@ -25,5 +25,16 @@ describe("createCaseSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("updateCaseStatusSchema", () => {
+  test("accepts supported lifecycle states", () => {
+    expect(updateCaseStatusSchema.parse({ status: "closed" })).toEqual({ status: "closed" });
+    expect(updateCaseStatusSchema.parse({ status: "open" })).toEqual({ status: "open" });
+  });
+
+  test("rejects unsupported lifecycle states", () => {
+    expect(updateCaseStatusSchema.safeParse({ status: "archived" }).success).toBe(false);
   });
 });

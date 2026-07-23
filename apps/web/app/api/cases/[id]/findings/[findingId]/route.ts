@@ -27,6 +27,10 @@ export async function PATCH(
     return jsonResponse({ findingId: parsedFindingId.data, status: parsed.data.status }, 200, requestId);
   } catch (error) {
     if (error instanceof SyntaxError) return jsonResponse({ error: "Invalid JSON body." }, 400, requestId);
+    if (error instanceof Error && error.message === "CASE_NOT_FOUND") return jsonResponse({ error: "Case not found." }, 404, requestId);
+    if (error instanceof Error && error.message === "CASE_CLOSED") {
+      return jsonResponse({ error: "Reopen the case before reviewing findings." }, 409, requestId);
+    }
     if (error instanceof Error && error.message === "FINDING_NOT_FOUND") return jsonResponse({ error: "Finding not found." }, 404, requestId);
     if (error instanceof Error && error.message === "FINDING_ALREADY_REVIEWED") return jsonResponse({ error: "This finding has already been reviewed." }, 409, requestId);
     requestLog("error", "findings.review.error", requestId, { error: error instanceof Error ? error.name : "unknown" });

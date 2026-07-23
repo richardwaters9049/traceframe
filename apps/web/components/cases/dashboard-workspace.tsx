@@ -10,7 +10,7 @@ import type { AuditVerification } from "@/lib/audit/verify";
 
 export function DashboardWorkspace({ initialPage, verification }: { initialPage: CaseCursorPage; verification: AuditVerification }) {
   const { openNewCase } = useWorkspaceUI();
-  const { totalCount, urgentCount } = initialPage;
+  const { openCount, closedCount, urgentCount } = initialPage;
   const verificationCopy = verification.status === "verified"
     ? { title: "Chain verified", detail: `${verification.checkedEvents} linked ${verification.checkedEvents === 1 ? "event" : "events"} checked.` }
     : verification.status === "broken"
@@ -30,7 +30,9 @@ export function DashboardWorkspace({ initialPage, verification }: { initialPage:
             <p className="ui-eyebrow text-[#8794FF]">Investigation overview</p>
             <div className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
               <h1 className="ui-page-title">Dashboard</h1>
-              <span className="ui-meta text-[#8A94A6]">{totalCount} active {totalCount === 1 ? "case" : "cases"}</span>
+              <span className="ui-meta text-[#8A94A6]">
+                {openCount} active {openCount === 1 ? "case" : "cases"} · {closedCount} closed
+              </span>
             </div>
           </div>
           <button
@@ -52,7 +54,7 @@ export function DashboardWorkspace({ initialPage, verification }: { initialPage:
               <span className="grid size-14 place-items-center rounded-2xl bg-primary/12 text-[#A8B3FF]">
                 <FolderKanban className="size-7" aria-hidden="true" />
               </span>
-              <p className="min-w-0 pl-[13px] pt-[10px] text-3xl font-medium tracking-[-0.02em]">{totalCount}</p>
+              <p className="min-w-0 pl-[13px] pt-[10px] text-3xl font-medium tracking-[-0.02em]">{openCount}</p>
               <p className="ui-meta min-w-0 pl-[13px] pt-[10px] text-[#C0C7D2]">Open records</p>
             </motion.div>
 

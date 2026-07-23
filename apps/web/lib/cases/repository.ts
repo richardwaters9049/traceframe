@@ -1,8 +1,16 @@
 import "server-only";
 
+import type postgres from "postgres";
+
 import { createAuditHash } from "@/lib/audit/hash";
 import { verifyAuditEvents, type AuditVerification, type VerifiableAuditEvent } from "@/lib/audit/verify";
-import type { AuditEventRecord, CaseCursorPage, CaseRecord, CreateCaseInput } from "@/lib/cases/contracts";
+import type {
+  AuditEventRecord,
+  CaseCursorPage,
+  CaseRecord,
+  CreateCaseInput,
+  UpdateCaseStatusInput,
+} from "@/lib/cases/contracts";
 import { getDatabaseClient } from "@/lib/db/client";
 import { getCaseFindings } from "@/lib/findings/repository";
 import { listCaseSources } from "@/lib/sources/repository";
@@ -12,7 +20,7 @@ const MAX_PAGE_SIZE = 50;
 export type CasePageDirection = "next" | "previous" | "last";
 
 type CaseRow = {
-  id: string; title: string; summary: string; status: string; priority: string;
+  id: string; title: string; summary: string; status: CaseRecord["status"]; priority: CaseRecord["priority"];
   created_at: Date; updated_at: Date;
 };
 
@@ -40,6 +48,43 @@ function toVerifiableEvent(row: AuditEventRow): VerifiableAuditEvent {
   return { ...serialiseAuditEvent(row), metadata: row.metadata, occurredAt: row.created_at.toISOString() };
 }
 
+async function appendCaseAuditEvent(
+  transaction: postgres.TransactionSql,
+  input: {
+    actorId: string;
+    action: "case.created" | "case.closed" | "case.reopened";
+    caseId: string;
+    reason: string;
+    metadata: Record<string, string | number | boolean | null>;
+  },
+) {
+  const [head] = await transaction<{ last_sequence: string; last_event_hash: string | null }[]>`
+    SELECT last_sequence, last_event_hash FROM audit_chain_heads WHERE ledger = 'global' FOR UPDATE`;
+  if (!head) throw new Error("Global audit chain head is missing");
+
+  const occurredAt = new Date().toISOString();
+  const ledgerSequence = Number(head.last_sequence) + 1;
+  const eventHash = createAuditHash({
+    actorId: input.actorId,
+    action: input.action,
+    objectType: "case",
+    objectId: input.caseId,
+    reason: input.reason,
+    metadata: input.metadata,
+    previousHash: head.last_event_hash,
+    occurredAt,
+  });
+
+  await transaction`
+    INSERT INTO audit_events
+      (ledger_sequence, actor_id, action, object_type, object_id, reason, metadata, previous_hash, event_hash, created_at)
+    VALUES (${ledgerSequence}, ${input.actorId}, ${input.action}, 'case', ${input.caseId},
+      ${input.reason}, ${transaction.json(input.metadata)}, ${head.last_event_hash}, ${eventHash}, ${occurredAt})`;
+  await transaction`
+    UPDATE audit_chain_heads SET last_sequence = ${ledgerSequence}, last_event_hash = ${eventHash}, updated_at = now()
+    WHERE ledger = 'global'`;
+}
+
 export function encodeCaseCursor(record: Pick<CaseRecord, "createdAt" | "id">) {
   return Buffer.from(JSON.stringify({ createdAt: record.createdAt, id: record.id } satisfies Cursor)).toString("base64url");
 }
@@ -60,25 +105,58 @@ export async function createCase(input: CreateCaseInput, actorId: string): Promi
       INSERT INTO cases (title, summary, priority) VALUES (${input.title}, ${input.summary}, ${input.priority})
       RETURNING id, title, summary, status, priority, created_at, updated_at`;
 
-    const [head] = await transaction<{ last_sequence: string; last_event_hash: string | null }[]>`
-      SELECT last_sequence, last_event_hash FROM audit_chain_heads WHERE ledger = 'global' FOR UPDATE`;
-    if (!head) throw new Error("Global audit chain head is missing");
-
-    const occurredAt = new Date().toISOString();
     const metadata = { priority: createdCase.priority, status: createdCase.status };
-    const previousHash = head.last_event_hash;
-    const ledgerSequence = Number(head.last_sequence) + 1;
-    const eventHash = createAuditHash({ actorId, action: "case.created", objectType: "case",
-      objectId: createdCase.id, reason: "Initial case record created", metadata, previousHash, occurredAt });
-
-    await transaction`
-      INSERT INTO audit_events (ledger_sequence, actor_id, action, object_type, object_id, reason, metadata, previous_hash, event_hash, created_at)
-      VALUES (${ledgerSequence}, ${actorId}, 'case.created', 'case', ${createdCase.id},
-        'Initial case record created', ${transaction.json(metadata)}, ${previousHash}, ${eventHash}, ${occurredAt})`;
-    await transaction`
-      UPDATE audit_chain_heads SET last_sequence = ${ledgerSequence}, last_event_hash = ${eventHash}, updated_at = now()
-      WHERE ledger = 'global'`;
+    await appendCaseAuditEvent(transaction, {
+      actorId,
+      action: "case.created",
+      caseId: createdCase.id,
+      reason: "Initial case record created",
+      metadata,
+    });
     return serialiseCase(createdCase);
+  });
+}
+
+export async function updateCaseStatus(
+  caseId: string,
+  input: UpdateCaseStatusInput,
+  actorId: string,
+): Promise<CaseRecord> {
+  const sql = getDatabaseClient();
+  return sql.begin(async (transaction) => {
+    const [currentCase] = await transaction<CaseRow[]>`
+      SELECT id, title, summary, status, priority, created_at, updated_at
+      FROM cases WHERE id = ${caseId} FOR UPDATE`;
+    if (!currentCase) throw new Error("CASE_NOT_FOUND");
+    if (currentCase.status === input.status) throw new Error("CASE_STATUS_UNCHANGED");
+
+    if (input.status === "closed") {
+      const [blockers] = await transaction<{ active_sources: string; proposed_findings: string }[]>`
+        SELECT
+          (SELECT count(*)::text FROM source_material
+            WHERE case_id = ${caseId} AND status IN ('queued', 'processing')) AS active_sources,
+          (SELECT count(*)::text FROM findings
+            WHERE case_id = ${caseId} AND status = 'proposed') AS proposed_findings`;
+      if (Number(blockers.active_sources) > 0) throw new Error("CASE_HAS_ACTIVE_SOURCES");
+      if (Number(blockers.proposed_findings) > 0) throw new Error("CASE_HAS_PROPOSED_FINDINGS");
+    }
+
+    const [updatedCase] = await transaction<CaseRow[]>`
+      UPDATE cases SET status = ${input.status}, updated_at = now()
+      WHERE id = ${caseId}
+      RETURNING id, title, summary, status, priority, created_at, updated_at`;
+    const action = input.status === "closed" ? "case.closed" : "case.reopened";
+    const reason = input.status === "closed"
+      ? "Case closed after active work was resolved"
+      : "Case reopened for further investigation";
+    await appendCaseAuditEvent(transaction, {
+      actorId,
+      action,
+      caseId,
+      reason,
+      metadata: { previousStatus: currentCase.status, status: updatedCase.status },
+    });
+    return serialiseCase(updatedCase);
   });
 }
 
@@ -94,9 +172,16 @@ export async function listCasePage(
   if (direction === "previous" && !cursor) throw new Error("INVALID_CURSOR");
   if (direction === "last" && cursor) throw new Error("INVALID_CURSOR");
 
-  const [{ count, urgent_count: urgentCount }] = await sql<{ count: string; urgent_count: string }[]>`
+  const [{
+    count,
+    open_count: openCount,
+    closed_count: closedCount,
+    urgent_count: urgentCount,
+  }] = await sql<{ count: string; open_count: string; closed_count: string; urgent_count: string }[]>`
     SELECT count(*)::text AS count,
-      count(*) FILTER (WHERE priority IN ('high', 'critical'))::text AS urgent_count
+      count(*) FILTER (WHERE status = 'open')::text AS open_count,
+      count(*) FILTER (WHERE status = 'closed')::text AS closed_count,
+      count(*) FILTER (WHERE status = 'open' AND priority IN ('high', 'critical'))::text AS urgent_count
     FROM cases`;
   const totalCount = Number(count);
 
@@ -132,7 +217,15 @@ export async function listCasePage(
     nextCursor = hasMoreOlder && cases.length ? encodeCaseCursor(cases[cases.length - 1]) : null;
   }
 
-  return { cases, previousCursor, nextCursor, totalCount, urgentCount: Number(urgentCount) };
+  return {
+    cases,
+    previousCursor,
+    nextCursor,
+    totalCount,
+    openCount: Number(openCount),
+    closedCount: Number(closedCount),
+    urgentCount: Number(urgentCount),
+  };
 }
 
 export async function verifyGlobalAuditLedger(): Promise<AuditVerification> {

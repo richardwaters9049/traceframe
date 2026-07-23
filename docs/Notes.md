@@ -44,3 +44,5 @@ protected-main branching and operations runbook.
 Added a portfolio deployment profile using one supervised Render web
 container, Neon PostgreSQL, and Cloudflare R2 while retaining the separate paid
 production architecture.
+Added audited case closing and reopening, with safe completion checks and
+read-only enforcement for closed investigations.

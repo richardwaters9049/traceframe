@@ -64,8 +64,9 @@ local state, or animation requires it, and keep client boundaries focused.
 
 The completed application slice includes authentication, a responsive protected
 workspace, a paginated case register, on-demand case workspaces, case creation,
-a globally verified audit ledger, a narrow end-to-end evidence-ingestion
-workflow, and reviewable analyst findings. Keep these current boundaries intact:
+a globally verified audit ledger, an audited open/closed case lifecycle, a
+narrow end-to-end evidence-ingestion workflow, and reviewable analyst findings.
+Keep these current boundaries intact:
 
 - The dashboard fetches a bounded 20-record summary page; it must not eagerly
   load every case workspace or audit history.
@@ -73,6 +74,10 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
   page at 50 records.
 - `GET /api/cases/:id` loads one selected workspace on demand.
 - `POST /api/cases` creates the case and its first global audit event atomically.
+- `PATCH /api/cases/:id` locks the case, enforces closure preconditions, updates
+  its lifecycle state, and appends the corresponding global audit event atomically.
+- Closed cases remain readable but reject source uploads, finding proposals,
+  and finding reviews until an authorised user reopens them.
 - The global audit verifier reports typed `verified`, `broken`, or `unavailable`
   states. A case audit view is only a filtered view of that global ledger.
 - `POST /api/cases/:id/sources` accepts one validated UTF-8 TXT, LOG, CSV, or
@@ -127,8 +132,11 @@ debt from the 19/07/2026 review.
   normalised email lookup, and uniqueness on `lower(email)`.
 - Require explicit same-origin validation on every state-changing Route Handler.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
-  read/create cases, upload sources, and manage findings; `reviewer` is
-  read-only, and unknown roles fail closed.
+  read/create/close/reopen cases, upload sources, and manage findings;
+  `reviewer` is read-only, and unknown roles fail closed.
+- Preserve case-row locking across lifecycle transitions, source uploads,
+  finding proposals, and finding reviews so closed cases cannot accept
+  concurrent writes.
 - Keep finding exports restricted to terminal reviewed records. Preserve
   non-cacheable responses, opaque filenames, and spreadsheet-formula
   neutralisation for CSV values.
@@ -188,8 +196,9 @@ generic, or decorative for its own sake.
   alignment that compensates for rounded card corners.
 
 When changing layout or motion, inspect both desktop and narrow viewports at
-100% browser zoom. Verify opening/closing the sidebar, drawers, case selection,
-login, and logout rather than judging only a static screenshot.
+100% browser zoom. Verify opening/closing the sidebar, drawers, lifecycle
+confirmation, case selection, login, and logout rather than judging only a
+static screenshot.
 
 ## Development workflow
 
