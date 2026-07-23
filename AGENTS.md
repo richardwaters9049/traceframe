@@ -26,8 +26,9 @@ project and the role it supports.
   Do not add FastAPI, Spring Boot, or a second browser-facing API service.
 - Database: PostgreSQL with Drizzle ORM.
 - Object storage: MinIO for original source material.
-- Background processing: Python worker. It is not an HTTP server; it currently
-  maintains readiness/health state and removes expired sessions hourly.
+- Background processing: Python worker. It is not an HTTP server; it maintains
+  readiness/health state, removes expired sessions, processes source ingestion,
+  and reconciles original-source disposal.
 - Local orchestration: Docker Compose. The web app, worker, database, and MinIO
   must continue to run as containers. The one-shot `migrate` service must finish
   successfully before seed, web, and worker startup.
@@ -84,7 +85,7 @@ Keep these current boundaries intact:
   JSON source up to 1 MiB and creates its provenance, job, and global audit event.
 - The Python worker claims jobs with `FOR UPDATE SKIP LOCKED`, verifies source
   integrity, normalises text, retries safely, and derives counted email, URL,
-  IPv4, domain, and embedded SHA-256 observations.
+  IPv4, domain, embedded SHA-256, and bounded user-agent observations.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
 - Original source objects are retained by default. An authenticated analyst or
@@ -112,6 +113,10 @@ Keep these current boundaries intact:
 - SHA-256 observations represent isolated 64-character hexadecimal values found
   in normalised source text. Keep strict boundaries and lowercase normalisation;
   do not classify partial or longer hexadecimal strings as hashes.
+- User-agent observations come only from explicit, case-insensitive
+  `User-Agent:` header lines. Collapse horizontal whitespace, reject empty,
+  control-character, and over-512-character values, and retain at most 50
+  distinct user agents per source.
 - Production infrastructure is defined in `render.yaml`. GitHub Actions is the
   release gate and Render deploys checked `main` commits. Provisioned runtime
   state, backups, alerts, and restore drills must not be claimed from the
@@ -122,7 +127,7 @@ Keep these current boundaries intact:
   limitations. Never silently replace the paid production topology with it.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
-parsers, additional observation types, automatic time-based retention, and
+parsers, further observation types, automatic time-based retention, and
 production dead-letter operations are planned product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.

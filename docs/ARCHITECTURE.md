@@ -70,11 +70,15 @@ Workers claim due jobs with `FOR UPDATE SKIP LOCKED`, increment the attempt
 count, and record a five-minute lease. Expired leases are recovered on startup.
 Before analysis, the worker retrieves the original and verifies its recorded
 byte length and SHA-256 digest. It normalises line endings and JSON formatting,
-records character, line, and word counts, and derives counted email, URL, and
-valid IPv4 observations. Completion updates the normalised content,
-observations, source, and job atomically. Failures use bounded exponential
-retry delays and become terminal after three attempts without exposing source
-content in logs or error text.
+records character, line, and word counts, and derives counted email, URL, valid
+IPv4, domain, embedded SHA-256, and user-agent observations. User agents are
+accepted only from explicit case-insensitive `User-Agent:` header lines.
+Horizontal whitespace is collapsed, empty, control-character, and values over
+512 characters are ignored, and no source retains more than 50 distinct user
+agents. Completion updates the normalised content, observations, source, and
+job atomically. Failures use bounded exponential retry delays and become
+terminal after three attempts without exposing source content in logs or error
+text.
 
 The case workspace loads source summaries on demand. While any source is queued
 or processing, or an original is awaiting disposal, the client polls the narrow
@@ -142,13 +146,15 @@ pending proposals, and source content remain outside the print layout.
 
 ## Cross-source relationships
 
-The worker derives normalised domain and embedded SHA-256 observations alongside
-email, URL, and IPv4 values. SHA-256 extraction accepts only isolated, exact
-64-character hexadecimal values and normalises their casing. Relationships are
-computed only when requested and only within one case: an indicator qualifies
-when it appears in at least two ready sources. The query returns at most 50
-correlations and at most 10 source details per correlation, ordered
-deterministically by prevalence and occurrence count.
+The worker derives normalised domain, embedded SHA-256, and bounded user-agent
+observations alongside email, URL, and IPv4 values. SHA-256 extraction accepts
+only isolated, exact 64-character hexadecimal values and normalises their
+casing. User-agent correlation uses the same normalised explicit-header value
+and never infers browser or device families. Relationships are computed only
+when requested and only within one case: an indicator qualifies when it appears
+in at least two ready sources. The query returns at most 50 correlations and at
+most 10 source details per correlation, ordered deterministically by prevalence
+and occurrence count.
 
 `GET /api/cases/:id/correlations` requires the same authenticated read
 capability as the case workspace, disables response caching, and returns no

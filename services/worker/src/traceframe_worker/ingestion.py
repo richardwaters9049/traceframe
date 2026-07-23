@@ -11,6 +11,8 @@ from minio import Minio
 from psycopg.rows import dict_row
 
 MAX_SOURCE_BYTES = 1024 * 1024
+MAX_USER_AGENT_LENGTH = 512
+MAX_USER_AGENT_OBSERVATIONS = 50
 URL_PATTERN = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 EMAIL_PATTERN = re.compile(
     r"(?<![\w.+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w.-])", re.IGNORECASE
@@ -117,6 +119,26 @@ def normalise_source(payload: bytes, media_type: str) -> str:
     ).strip()
 
 
+def derive_user_agent_observations(text: str) -> list[tuple[str, str]]:
+    counts: dict[str, int] = {}
+    for line in text.splitlines():
+        name, separator, raw_value = line.partition(":")
+        if not separator or name.strip().casefold() != "user-agent":
+            continue
+        value = re.sub(r"[ \t]+", " ", raw_value.strip(" \t"))
+        if (
+            not value
+            or len(value) > MAX_USER_AGENT_LENGTH
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+        ):
+            continue
+        if value in counts:
+            counts[value] += 1
+        elif len(counts) < MAX_USER_AGENT_OBSERVATIONS:
+            counts[value] = 1
+    return [(value, occurrences) for value, occurrences in counts.items()]
+
+
 def derive_observations(text: str) -> list[tuple[str, str, int]]:
     values: list[tuple[str, str]] = []
     values.extend(
@@ -131,6 +153,10 @@ def derive_observations(text: str) -> list[tuple[str, str, int]]:
         if all(0 <= int(part) <= 255 for part in match.split("."))
     )
     counts = Counter(values)
+    counts.update({
+        ("user_agent", value): occurrences
+        for value, occurrences in derive_user_agent_observations(text)
+    })
     return [(kind, value, occurrences) for (kind, value), occurrences in sorted(counts.items())]
 
 

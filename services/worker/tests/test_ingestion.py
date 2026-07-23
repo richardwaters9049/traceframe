@@ -1,7 +1,12 @@
 import pytest
 
 import traceframe_worker.ingestion as ingestion
-from traceframe_worker.ingestion import derive_observations, normalise_source
+from traceframe_worker.ingestion import (
+    MAX_USER_AGENT_LENGTH,
+    MAX_USER_AGENT_OBSERVATIONS,
+    derive_observations,
+    normalise_source,
+)
 
 
 def test_create_minio_client_configures_r2_region(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -57,3 +62,47 @@ def test_derive_observations_rejects_partial_sha256_values() -> None:
     result = derive_observations(f"{too_short} {embedded}")
 
     assert all(kind != "sha256" for kind, _, _ in result)
+
+
+def test_derive_observations_normalises_explicit_user_agent_headers() -> None:
+    result = derive_observations(
+        "User-Agent:\tTraceframeSynthetic/1.0   ReviewBot/2.0\n"
+        "user-agent: TraceframeSynthetic/1.0 ReviewBot/2.0\n"
+        "Agent: ignored\n"
+        "Narrative mentions User-Agent: inline-but-not-a-header"
+    )
+
+    assert (
+        "user_agent",
+        "TraceframeSynthetic/1.0 ReviewBot/2.0",
+        2,
+    ) in result
+    assert all(value != "inline-but-not-a-header" for _, value, _ in result)
+
+
+def test_derive_observations_rejects_invalid_user_agent_values() -> None:
+    oversized = "a" * (MAX_USER_AGENT_LENGTH + 1)
+    result = derive_observations(
+        f"User-Agent: \nUser-Agent: {oversized}\nUser-Agent: invalid\x01value"
+    )
+
+    assert all(kind != "user_agent" for kind, _, _ in result)
+
+
+def test_derive_observations_bounds_distinct_user_agents_per_source() -> None:
+    lines = [
+        f"User-Agent: TraceframeSynthetic/{index}"
+        for index in range(MAX_USER_AGENT_OBSERVATIONS + 5)
+    ]
+    lines.append("User-Agent: TraceframeSynthetic/0")
+
+    user_agents = [
+        observation
+        for observation in derive_observations("\n".join(lines))
+        if observation[0] == "user_agent"
+    ]
+
+    assert len(user_agents) == MAX_USER_AGENT_OBSERVATIONS
+    assert ("user_agent", "TraceframeSynthetic/0", 2) in user_agents
+    excluded = f"TraceframeSynthetic/{MAX_USER_AGENT_OBSERVATIONS}"
+    assert all(value != excluded for _, value, _ in user_agents)

@@ -29,7 +29,8 @@ Traceframe currently provides a complete first vertical slice:
 - Durable PostgreSQL ingestion jobs with safe worker claiming, retries, and
   stale-lease recovery.
 - Deterministic UTF-8 normalisation with source integrity verification and
-  derived email, URL, IPv4, domain, and embedded SHA-256 observations.
+  derived email, URL, IPv4, domain, embedded SHA-256, and bounded user-agent
+  observations.
 - Live source status, provenance, normalisation counts, and observations inside
   the case workspace.
 - Audited original-source disposal with durable worker retries, live retention
@@ -56,9 +57,9 @@ The Python worker publishes a health heartbeat, removes expired sessions, and
 processes durable ingestion and original-disposal jobs. The first ingestion
 slice is deliberately narrow: UTF-8 text-like files up to 1 MiB are
 integrity-checked, normalised, and scanned for email, URL, IPv4, domain, and
-strictly shaped SHA-256 observations. Analysts can promote those observations
-into audited findings. Binary evidence, large-file streaming, and richer
-parsers remain future work.
+strictly shaped SHA-256 observations, plus explicit `User-Agent:` header
+values. Analysts can promote those observations into audited findings. Binary
+evidence, large-file streaming, and richer parsers remain future work.
 
 ## Product flow
 
@@ -315,6 +316,9 @@ curl -fsS http://127.0.0.1:3000/api/health
 - Embedded SHA-256 observations require an isolated 64-character hexadecimal
   value and are normalised to lowercase; partial or longer hexadecimal values
   are ignored.
+- User-agent observations are accepted only from explicit `User-Agent:` header
+  lines. Horizontal whitespace is normalised, invalid or over-512-character
+  values are ignored, and each source is capped at 50 distinct values.
 - The project contains synthetic information only.
 
 A live production deployment still requires the Blueprint to be provisioned,
@@ -392,6 +396,5 @@ automatic down-migrations are intentionally not provided.
 ## Next milestones
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
-- Add a carefully bounded user-agent observation type.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.

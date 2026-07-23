@@ -15,7 +15,7 @@ describe("serialiseCorrelations", () => {
     expect(collection.summary).toEqual({
       total: 2,
       sourceLinks: 4,
-      byKind: { email: 0, url: 0, ipv4: 1, domain: 1, sha256: 0 },
+      byKind: { email: 0, url: 0, ipv4: 1, domain: 1, sha256: 0, user_agent: 0 },
     });
     expect(collection.correlations[0]).toEqual(expect.objectContaining({
       kind: "domain",

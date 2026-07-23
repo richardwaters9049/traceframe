@@ -38,7 +38,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
         name: "synthetic-source.txt",
         mimeType: "text/plain",
         buffer: Buffer.from(
-          `Synthetic Traceframe observation only.\nanalyst@example.test\n192.0.2.42\nhttps://example.test/source\n${syntheticHash}`,
+          `Synthetic Traceframe observation only.\nUser-Agent: TraceframeSynthetic/1.0\nanalyst@example.test\n192.0.2.42\nhttps://example.test/source\n${syntheticHash}`,
         ),
       },
     },
@@ -48,22 +48,27 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
     const body = await response.json() as { sources: Array<{ status: string; observations: Array<{ kind: string }> }> };
     return { status: body.sources[0]?.status, kinds: body.sources[0]?.observations.map((item) => item.kind).sort() };
-  }, { timeout: 20_000 }).toEqual({ status: "ready", kinds: ["domain", "email", "ipv4", "sha256", "url"] });
+  }, { timeout: 20_000 }).toEqual({
+    status: "ready",
+    kinds: ["domain", "email", "ipv4", "sha256", "url", "user_agent"],
+  });
 
   const sourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
   const sourcesBody = await sourcesResponse.json() as {
     sources: Array<{ observations: Array<{ id: string; kind: string }> }>;
   };
-  const observationId = sourcesBody.sources[0]?.observations.find((item) => item.kind === "ipv4")?.id;
+  const observationId = sourcesBody.sources[0]?.observations.find(
+    (item) => item.kind === "user_agent",
+  )?.id;
   expect(observationId).toBeTruthy();
 
   expect((await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
     headers: { Origin: "https://untrusted.invalid" },
-    data: { observationId, note: "Synthetic address requires analyst review." },
+    data: { observationId, note: "Synthetic client signature requires analyst review." },
   })).status()).toBe(403);
   const proposalResponse = await request.post(`/api/cases/${firstCreation.case.id}/findings`, {
     headers: { Origin: origin },
-    data: { observationId, note: "Synthetic address requires analyst review." },
+    data: { observationId, note: "Synthetic client signature requires analyst review." },
   });
   expect(proposalResponse.status()).toBe(201);
   const proposal = await proposalResponse.json() as { findingId: string };
@@ -99,7 +104,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     proposed: 0,
     confirmed: 1,
     dismissed: 0,
-    byKind: { email: 0, url: 0, ipv4: 1, domain: 0, sha256: 0 },
+    byKind: { email: 0, url: 0, ipv4: 0, domain: 0, sha256: 0, user_agent: 1 },
   });
 
   const sourceWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
@@ -119,7 +124,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(sourceWorkspace.workspace.findings).toContainEqual(expect.objectContaining({
     id: proposal.findingId,
     status: "confirmed",
-    analystNote: "Synthetic address requires analyst review.",
+    analystNote: "Synthetic client signature requires analyst review.",
     reviewRationale: "Confirmed as relevant synthetic evidence.",
   }));
   expect(sourceWorkspace.workspace.findingSummary).toEqual(expect.objectContaining({
@@ -135,6 +140,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   const csvExport = await csvExportResponse.text();
   expect(csvExport.startsWith("\uFEFF")).toBe(true);
   expect(csvExport).toContain('"confirmed"');
+  expect(csvExport).toContain('"user_agent"');
   expect(csvExport).not.toContain('"proposed"');
 
   const jsonExportResponse = await request.get(`/api/cases/${firstCreation.case.id}/findings/export?format=json`);
@@ -143,7 +149,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     schemaVersion: number;
     case: { id: string };
     summary: { reviewed: number; confirmed: number; dismissed: number };
-    findings: Array<{ status: string; reviewRationale: string }>;
+    findings: Array<{ kind: string; status: string; reviewRationale: string }>;
   };
   expect(jsonExport).toEqual(expect.objectContaining({
     schemaVersion: 1,
@@ -151,6 +157,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     summary: { reviewed: 1, confirmed: 1, dismissed: 0 },
   }));
   expect(jsonExport.findings).toContainEqual(expect.objectContaining({
+    kind: "user_agent",
     status: "confirmed",
     reviewRationale: "Confirmed as relevant synthetic evidence.",
   }));
@@ -266,7 +273,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
         name: "synthetic-related-source.log",
         mimeType: "text/plain",
         buffer: Buffer.from(
-          `Related synthetic record only.\nresponder@example.test\n192.0.2.42\nexample.test\n${syntheticHash}`,
+          `Related synthetic record only.\nUser-Agent: TraceframeSynthetic/1.0\nresponder@example.test\n192.0.2.42\nexample.test\n${syntheticHash}`,
         ),
       },
     },
@@ -288,9 +295,9 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     limits: { correlations: number; sourcesPerCorrelation: number };
   };
   expect(correlationCollection.summary).toEqual({
-    total: 3,
-    sourceLinks: 6,
-    byKind: { email: 0, url: 0, ipv4: 1, domain: 1, sha256: 1 },
+    total: 4,
+    sourceLinks: 8,
+    byKind: { email: 0, url: 0, ipv4: 1, domain: 1, sha256: 1, user_agent: 1 },
   });
   expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
     kind: "domain",
@@ -308,6 +315,12 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
     kind: "sha256",
     value: syntheticHash,
+    sourceCount: 2,
+    totalOccurrences: 2,
+  }));
+  expect(correlationCollection.correlations).toContainEqual(expect.objectContaining({
+    kind: "user_agent",
+    value: "TraceframeSynthetic/1.0",
     sourceCount: 2,
     totalOccurrences: 2,
   }));
@@ -336,7 +349,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     };
     const disposed = body.sources.find((source) => source.id === secondSource.sourceId);
     return { objectStatus: disposed?.objectStatus, observations: disposed?.observations.length };
-  }, { timeout: 20_000 }).toEqual({ objectStatus: "disposed", observations: 4 });
+  }, { timeout: 20_000 }).toEqual({ objectStatus: "disposed", observations: 5 });
   expect((await request.delete(
     `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
     { headers: { Origin: origin } },
