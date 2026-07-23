@@ -32,6 +32,8 @@ Traceframe currently provides a complete first vertical slice:
   derived email, URL, IPv4, domain, and embedded SHA-256 observations.
 - Live source status, provenance, normalisation counts, and observations inside
   the case workspace.
+- Audited original-source disposal with durable worker retries, live retention
+  status, and preserved provenance, observations, and findings.
 - An on-demand Relationships view that surfaces repeated indicators across
   ready sources using bounded correlation and source-detail limits.
 - Reviewable analyst findings that promote individual observations into
@@ -51,7 +53,7 @@ Traceframe currently provides a complete first vertical slice:
   worker.
 
 The Python worker publishes a health heartbeat, removes expired sessions, and
-processes one durable ingestion job at a time. The first ingestion slice is
+processes durable ingestion and original-disposal jobs. The first ingestion slice is
 deliberately narrow: UTF-8 text-like files up to 1 MiB are integrity-checked,
 normalised, and scanned for email, URL, IPv4, domain, and strictly shaped
 SHA-256 observations. Analysts can promote those observations into audited
@@ -79,7 +81,9 @@ After signing in, the user stays within one protected workspace:
 11. Open Relationships to inspect indicators repeated across ready sources.
 12. Close a resolved case after processing and finding reviews are complete;
     reopen it when further investigation is required.
-13. Open the architecture view from the same component-driven workspace.
+13. When retention no longer requires an original, request its audited disposal
+    while keeping provenance and derived analysis available.
+14. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.
@@ -122,7 +126,7 @@ Next.js web + Route Handlers ---- PostgreSQL
 | `web` | Next.js interface, authentication, and Route Handlers | <http://127.0.0.1:3000> |
 | `db` | Users, sessions, cases, jobs, and audit events | Internal only |
 | `migrate` | Applies versioned schema migrations before dependent services | One-shot internal service |
-| `worker` | Claims and processes durable source-ingestion jobs and maintains health | Internal only |
+| `worker` | Processes durable ingestion and source-disposal jobs and maintains health | Internal only |
 | `minio` | S3-compatible source-material storage | Console: <http://127.0.0.1:9001> |
 | `seed` | Idempotently creates or updates the local demo user | One-shot internal service |
 
@@ -250,8 +254,10 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases` | Return cases for an authenticated user |
 | `POST` | `/api/cases` | Validate and create a case with its first audit event |
 | `GET` | `/api/cases/:id` | Load one case workspace and its filtered audit view |
+| `PATCH` | `/api/cases/:id` | Close or reopen a case with an atomic audit event |
 | `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
 | `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
+| `DELETE` | `/api/cases/:id/sources/:sourceId` | Audit and queue permanent disposal of an original object |
 | `GET` | `/api/cases/:id/correlations` | Return a bounded view of indicators repeated across ready sources |
 | `GET` | `/api/cases/:id/findings` | Return findings with case-level lifecycle and indicator summaries |
 | `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
@@ -280,6 +286,10 @@ curl -fsS http://127.0.0.1:3000/api/health
 - A source record, durable job, and `source.uploaded` audit event are committed
   atomically after object storage succeeds; the object is removed if that
   transaction fails.
+- Original disposal is explicit and irreversible. The request, durable disposal
+  job, source retention state, and `source.disposal_requested` event commit
+  atomically; the worker retries idempotent object deletion while PostgreSQL
+  retains provenance and derived analysis.
 - Finding proposals and terminal review decisions extend the global ledger in
   the same transaction as their state change. Actor identity comes from the
   server session, and analyst notes are not copied into audit metadata or logs.
@@ -292,9 +302,9 @@ curl -fsS http://127.0.0.1:3000/api/health
   every sequence and predecessor link before the UI reports the ledger verified.
 - Mutating handlers reject cross-origin requests and all API responses include
   a request ID for correlation.
-- Workspace roles are fail-closed: `analyst` and `admin` can read/create cases
-  and upload sources; `reviewer` is read-only; unknown roles receive no case
-  capability.
+- Workspace roles are fail-closed: `analyst` and `admin` can read/create cases,
+  upload and dispose original sources, and manage findings; `reviewer` is
+  read-only; unknown roles receive no case capability.
 - User-specific and case-specific dashboard data is dynamically rendered and is
   not cached across sessions.
 - Cross-source correlation is read-only, loaded on demand, restricted to ready
@@ -380,7 +390,6 @@ automatic down-migrations are intentionally not provided.
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
 - Add a carefully bounded user-agent observation type.
-- Add source lifecycle controls, retention policy, and object reconciliation.
 - Add reviewed-finding bundles with provenance manifests for controlled hand-off.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.

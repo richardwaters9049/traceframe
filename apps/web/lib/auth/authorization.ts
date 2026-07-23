@@ -5,12 +5,13 @@ export type WorkspaceCapability =
   | "cases:create"
   | "cases:update"
   | "sources:create"
+  | "sources:dispose"
   | "findings:create"
   | "findings:review";
 
 const roleCapabilities: Record<string, ReadonlySet<WorkspaceCapability>> = {
-  admin: new Set(["cases:read", "cases:create", "cases:update", "sources:create", "findings:create", "findings:review"]),
-  analyst: new Set(["cases:read", "cases:create", "cases:update", "sources:create", "findings:create", "findings:review"]),
+  admin: new Set(["cases:read", "cases:create", "cases:update", "sources:create", "sources:dispose", "findings:create", "findings:review"]),
+  analyst: new Set(["cases:read", "cases:create", "cases:update", "sources:create", "sources:dispose", "findings:create", "findings:review"]),
   reviewer: new Set(["cases:read"]),
 };
 
