@@ -18,12 +18,14 @@ def test_settings_accept_valid_database_url(monkeypatch: pytest.MonkeyPatch) -> 
 def test_settings_accept_render_private_hostport(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://traceframe:secret@db:5432/traceframe")
     monkeypatch.setenv("MINIO_ENDPOINT", "traceframe-minio:10000")
+    monkeypatch.setenv("MINIO_REGION", "auto")
     monkeypatch.setenv("MINIO_ACCESS_KEY", "traceframe")
     monkeypatch.setenv("MINIO_SECRET_KEY", "local-development-only")
 
     settings = Settings()  # type: ignore[call-arg]
 
     assert settings.minio_endpoint == "http://traceframe-minio:10000"
+    assert settings.minio_region == "auto"
 
 
 def test_settings_reject_minio_endpoint_with_path(monkeypatch: pytest.MonkeyPatch) -> None:

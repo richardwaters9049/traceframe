@@ -34,6 +34,10 @@ project and the role it supports.
 - Production orchestration: Render Blueprint. Only the Next.js service is
   public; the worker and MinIO remain private, and managed PostgreSQL has no
   public allow-list. Do not add secrets to `render.yaml` or committed files.
+- Portfolio orchestration: `render.portfolio.yaml` runs Next.js and the Python worker
+  as separately supervised processes in one Render Free Web Service, with Neon
+  PostgreSQL and Cloudflare R2. This is the only approved co-location exception;
+  Python remains non-HTTP and the paid production profile stays separated.
 
 Next.js owns the UI and its same-origin HTTP boundary, so normal browser flows
 do not require CORS. Authentication, authorisation, validation, and safe data
@@ -99,6 +103,10 @@ workflow, and reviewable analyst findings. Keep these current boundaries intact:
   release gate and Render deploys checked `main` commits. Provisioned runtime
   state, backups, alerts, and restore drills must not be claimed from the
   infrastructure definition alone.
+- The zero-cost portfolio profile is defined separately in `render.portfolio.yaml`.
+  Preserve its fail-together process supervision, direct migration connection,
+  pooled runtime connection, private bucket credentials, and explicit demo-only
+  limitations. Never silently replace the paid production topology with it.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
 parsers, additional observation types, source retention controls, and
@@ -298,6 +306,8 @@ runtime verification that was not performed.
 - Keep `README.md` accurate for setup, services, and the main workflow.
 - Keep `docs/DEPLOYMENT.md` and `docs/BRANCHING.md` accurate when production
   topology, release gates, rollback, or branch policy changes.
+- Keep `docs/PORTFOLIO_DEPLOYMENT.md` accurate when the Render, Neon, R2, startup, or
+  free-tier requirements change.
 - Preserve dated technical-debt history under `docs/tech_debt`. Add a new dated
   record for a future review rather than rewriting the 19/07/2026 assessment or
   20/07/2026 resolution report.

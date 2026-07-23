@@ -1,4 +1,32 @@
+import pytest
+
+import traceframe_worker.ingestion as ingestion
 from traceframe_worker.ingestion import derive_observations, normalise_source
+
+
+def test_create_minio_client_configures_r2_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_minio(endpoint: str, **options: object) -> object:
+        captured["endpoint"] = endpoint
+        captured.update(options)
+        return sentinel
+
+    monkeypatch.setattr(ingestion, "Minio", fake_minio)
+
+    client = ingestion.create_minio_client(
+        "https://account.r2.cloudflarestorage.com", "access-key", "secret-key", "auto"
+    )
+
+    assert client is sentinel
+    assert captured == {
+        "endpoint": "account.r2.cloudflarestorage.com",
+        "access_key": "access-key",
+        "secret_key": "secret-key",
+        "secure": True,
+        "region": "auto",
+    }
 
 
 def test_normalise_json_is_deterministic() -> None:

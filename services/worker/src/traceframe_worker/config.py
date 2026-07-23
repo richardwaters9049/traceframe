@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     poll_interval_seconds: float = Field(default=5, gt=0, le=60)
     minio_endpoint: str = Field(default="http://minio:9000", min_length=3)
     minio_bucket: str = Field(default="case-source-material", min_length=3, max_length=63)
+    minio_region: str = Field(default="us-east-1", min_length=2, max_length=32)
     minio_access_key: str = Field(min_length=3)
     minio_secret_key: str = Field(min_length=8)
     worker_id: str = Field(default="traceframe-worker", min_length=3, max_length=80)

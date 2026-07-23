@@ -37,6 +37,22 @@ migration runner during pre-deploy; a PostgreSQL transaction-level advisory lock
 serialises them, and each migration is checked again while the lock is held.
 This preserves ordered, once-only application even when deployments overlap.
 
+## Free demonstration topology
+
+`render.portfolio.yaml` provides a separate portfolio topology: one Render Free
+Web Service runs the Next.js server and Python worker as independently
+supervised processes, Neon provides PostgreSQL, and Cloudflare R2 provides the
+same S3-compatible object boundary as MinIO. The supervisor applies migrations
+with Neon's direct connection, seeds the synthetic demo identity, then starts
+both long-running processes. If either exits, the container exits.
+
+This profile changes physical placement, not browser or data boundaries. Python
+does not expose an HTTP server, Next.js remains the only browser-facing API, and
+the worker still claims durable PostgreSQL jobs. Co-location is strictly a
+portfolio-hosting compromise: the worker sleeps with the web service, external
+datastore traffic crosses provider networks, and the profile has no production
+recovery or availability guarantee.
+
 ## Evidence ingestion
 
 `POST /api/cases/:id/sources` requires an authenticated analyst or admin and an

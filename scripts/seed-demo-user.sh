@@ -5,7 +5,9 @@ set -eu
 : "${AUTH_DEMO_NAME:?AUTH_DEMO_NAME is required}"
 : "${AUTH_DEMO_PASSWORD:?AUTH_DEMO_PASSWORD is required}"
 
-if [ -n "${DATABASE_URL:-}" ]; then
+if [ -n "${MIGRATION_DATABASE_URL:-}" ]; then
+  psql "$MIGRATION_DATABASE_URL" --file=/seed/seed-demo-user.sql
+elif [ -n "${DATABASE_URL:-}" ]; then
   psql "$DATABASE_URL" --file=/seed/seed-demo-user.sql
 else
   : "${PGHOST:?PGHOST is required when DATABASE_URL is not set}"

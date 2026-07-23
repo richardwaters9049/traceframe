@@ -95,6 +95,7 @@ services:
       AUTH_THROTTLE_SECRET: ${AUTH_THROTTLE_SECRET:-traceframe-local-throttle-change-in-production}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_BUCKET: ${MINIO_BUCKET:-case-source-material}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-traceframe}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-development-only}
     ports:
@@ -128,6 +129,7 @@ services:
       POLL_INTERVAL_SECONDS: ${WORKER_POLL_INTERVAL_SECONDS:-5}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
       MINIO_BUCKET: ${MINIO_BUCKET:-case-source-material}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-traceframe}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-development-only}
       WORKER_ID: ${WORKER_ID:-traceframe-worker}

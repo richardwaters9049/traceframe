@@ -5,6 +5,11 @@ Traceframe's production topology is defined in the repository by
 Actions is the release gate: Render deploys a `main` commit only after its
 checks pass.
 
+This is the paid, service-separated production profile. The distinct
+[`render.portfolio.yaml`](../render.portfolio.yaml) profile is documented in the
+[portfolio deployment guide](PORTFOLIO_DEPLOYMENT.md); it co-locates the web and
+worker processes and must not be represented as an equivalent production SLA.
+
 ## Hosted topology
 
 ```text

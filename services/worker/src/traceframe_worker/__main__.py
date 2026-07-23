@@ -45,7 +45,10 @@ def main() -> None:
 
     wait_for_database(database_url)
     minio_client = create_minio_client(
-        str(settings.minio_endpoint), settings.minio_access_key, settings.minio_secret_key
+        str(settings.minio_endpoint),
+        settings.minio_access_key,
+        settings.minio_secret_key,
+        settings.minio_region,
     )
     recovered = recover_stale_jobs(database_url)
     logger.info("worker_ready pid=%s", os.getpid())

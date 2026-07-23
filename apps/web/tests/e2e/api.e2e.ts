@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 const credentials = { email: "analyst@traceframe.local", password: "Traceframe!2026" };
+const applicationOrigin = new URL(
+  process.env.TRACEFRAME_BASE_URL ?? "http://127.0.0.1:3000",
+).origin;
 
 test("API boundaries, pagination, concurrency, revocation, and throttling", async ({ request }, testInfo) => {
   test.skip(testInfo.project.name !== "chromium", "API boundary coverage runs once");
-  const origin = "http://127.0.0.1:3000";
+  const origin = applicationOrigin;
 
   expect((await request.post("/api/auth/login", { headers: { Origin: "https://untrusted.invalid" }, data: credentials })).status()).toBe(403);
   expect((await request.post("/api/auth/login", { headers: { Origin: origin, "Content-Type": "application/json" }, data: "not-json" })).status()).toBe(400);

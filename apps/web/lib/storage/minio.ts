@@ -25,7 +25,7 @@ function getClient() {
   if (client) return client;
   client = new S3Client({
     endpoint: endpointUrl(),
-    region: "us-east-1",
+    region: process.env.MINIO_REGION ?? "us-east-1",
     forcePathStyle: true,
     credentials: {
       accessKeyId: process.env.MINIO_ACCESS_KEY ?? "traceframe",
