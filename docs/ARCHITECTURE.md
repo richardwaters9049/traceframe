@@ -121,11 +121,19 @@ then filters the already bounded case collection in component state. Filter
 choices are intentionally not encoded in routes or query strings and do not
 trigger additional database requests.
 
-Reviewed findings have two deliberately bounded hand-off paths. An authenticated
-read-only Route Handler returns CSV or JSON containing only `confirmed` and
-`dismissed` findings; proposed decisions never enter an export. Responses use
-opaque case identifiers in filenames, disable caching, and neutralise CSV cells
-that spreadsheet software could interpret as formulas.
+Reviewed findings have three deliberately bounded hand-off paths. An
+authenticated read-only Route Handler returns CSV or JSON containing only
+`confirmed` and `dismissed` findings; proposed decisions never enter an export.
+Responses use opaque case identifiers in filenames, disable caching, and
+neutralise CSV cells that spreadsheet software could interpret as formulas.
+
+The same handler can create a ZIP bundle only when at least one reviewed finding
+exists and the global audit ledger is currently verified. The archive contains
+the reviewed JSON and CSV, a hand-off note, and a provenance manifest. The
+manifest records the verified ledger head, hashes every included report, and
+lists only source records referenced by the exported findings. It explicitly
+excludes original objects and normalised source text, including when the
+original has already been disposed.
 
 The case workspace also renders a print-only summary from the already loaded
 case and finding collection. The printed report includes case context, review

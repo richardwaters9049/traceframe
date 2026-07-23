@@ -75,6 +75,7 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await page.getByRole("tab", { name: /^findings(?: · \d+)?$/ }).click();
     await expect(page.getByRole("heading", { name: "Analyst findings" })).toBeVisible();
     await expect(page.getByLabel("Finding summary")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Bundle", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Print", exact: true })).toBeVisible();
     await page.emulateMedia({ media: "print" });
     await expect(page.locator(".case-print-summary")).toBeVisible();
@@ -84,7 +85,31 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await expect(page.getByRole("heading", { name: "Cross-source relationships" })).toBeVisible();
     await expect(page.getByLabel("Relationship summary")).toBeVisible();
     await page.getByRole("button", { name: "Back to dashboard" }).click();
+    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   }
+
+  let reviewedCaseRow = page.getByTestId("case-row").filter({
+    hasText: /Concurrent synthetic .+-0/,
+  }).first();
+  if (await reviewedCaseRow.count() === 0) {
+    await page.getByRole("button", { name: "Go to next page", exact: true }).click();
+    reviewedCaseRow = page.getByTestId("case-row").filter({
+      hasText: /Concurrent synthetic .+-0/,
+    }).first();
+  }
+  await expect(reviewedCaseRow).toBeVisible();
+  await reviewedCaseRow.click();
+  await page.getByRole("tab", { name: /^findings(?: · \d+)?$/ }).click();
+  const bundleButton = page.getByRole("button", { name: "Bundle", exact: true });
+  await expect(bundleButton).toBeEnabled();
+  const bundleDownload = page.waitForEvent("download");
+  await bundleButton.click();
+  const downloadedBundle = await bundleDownload;
+  expect(downloadedBundle.suggestedFilename()).toMatch(
+    /^traceframe-case-[0-9a-f-]{36}-reviewed-findings\.zip$/,
+  );
+  await expect(page.getByText("Verified hand-off bundle prepared.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to dashboard" }).click();
 
   if (testInfo.project.name.startsWith("mobile")) {
     await page.getByRole("button", { name: "Open sidebar" }).click();

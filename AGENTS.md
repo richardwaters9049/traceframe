@@ -100,8 +100,12 @@ Keep these current boundaries intact:
   collection. Status and indicator filters remain local workspace state and do
   not use routes, query strings, or extra database requests.
 - Reviewed-finding exports contain terminal `confirmed` and `dismissed` records
-  only. CSV and JSON downloads are authenticated, non-cacheable, and named with
-  the opaque case ID; the case workspace also provides a print-only summary.
+  only. CSV, JSON, and ZIP downloads are authenticated, non-cacheable, and named
+  with the opaque case ID; the case workspace also provides a print-only summary.
+- ZIP hand-off bundles require at least one reviewed finding and a verified
+  global ledger. They contain reviewed JSON/CSV, a hand-off note, and a manifest
+  with hashed report files and referenced-source provenance. Never include
+  original objects or normalised source text.
 - Cross-source relationships load on demand and include only indicators found
   in at least two ready sources within the selected case. Preserve the limits
   of 50 correlations and 10 displayed source records per correlation.
@@ -147,6 +151,8 @@ debt from the 19/07/2026 review.
 - Keep finding exports restricted to terminal reviewed records. Preserve
   non-cacheable responses, opaque filenames, and spreadsheet-formula
   neutralisation for CSV values.
+- Keep ZIP bundle creation gated on verified ledger integrity. Preserve manifest
+  hashes and the explicit exclusion of original and normalised source content.
 - Keep correlation queries case-scoped, read-only, non-cacheable, limited to
   ready sources, and bounded by the documented result and source-detail caps.
 - Preserve the atomic case-and-first-audit-event transaction. The transaction

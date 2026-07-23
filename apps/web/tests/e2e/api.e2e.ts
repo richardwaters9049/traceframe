@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { strFromU8, unzipSync } from "fflate";
 
 const credentials = { email: "analyst@traceframe.local", password: "Traceframe!2026" };
 const applicationOrigin = new URL(
@@ -25,6 +26,10 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   })));
   expect(creations.every((response) => response.status() === 201)).toBe(true);
   const firstCreation = await creations[0].json() as { case: { id: string } };
+  const secondCreation = await creations[1].json() as { case: { id: string } };
+  expect((await request.get(
+    `/api/cases/${secondCreation.case.id}/findings/export?format=bundle`,
+  )).status()).toBe(409);
 
   const sourceUpload = await request.post(`/api/cases/${firstCreation.case.id}/sources`, {
     headers: { Origin: origin },
@@ -148,6 +153,49 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(jsonExport.findings).toContainEqual(expect.objectContaining({
     status: "confirmed",
     reviewRationale: "Confirmed as relevant synthetic evidence.",
+  }));
+
+  const bundleExportResponse = await request.get(
+    `/api/cases/${firstCreation.case.id}/findings/export?format=bundle`,
+  );
+  expect(bundleExportResponse.status()).toBe(200);
+  expect(bundleExportResponse.headers()["cache-control"]).toContain("no-store");
+  expect(bundleExportResponse.headers()["content-type"]).toBe("application/zip");
+  expect(bundleExportResponse.headers()["content-disposition"]).toContain(
+    `traceframe-case-${firstCreation.case.id}-reviewed-findings.zip`,
+  );
+  const bundleFiles = unzipSync(new Uint8Array(await bundleExportResponse.body()));
+  expect(Object.keys(bundleFiles).sort()).toEqual([
+    "HANDOFF.txt",
+    "provenance-manifest.json",
+    "reviewed-findings.csv",
+    "reviewed-findings.json",
+  ]);
+  const bundleManifest = JSON.parse(
+    strFromU8(bundleFiles["provenance-manifest.json"]!),
+  ) as {
+    verification: { status: string };
+    policy: {
+      includesOriginalSourceMaterial: boolean;
+      includesNormalisedSourceContent: boolean;
+      findingStatuses: string[];
+    };
+    summary: { reviewed: number; referencedSources: number };
+    sources: Array<{ id: string; sha256: string; objectStatus: string }>;
+  };
+  expect(bundleManifest.verification.status).toBe("verified");
+  expect(bundleManifest.policy).toEqual({
+    includesOriginalSourceMaterial: false,
+    includesNormalisedSourceContent: false,
+    findingStatuses: ["confirmed", "dismissed"],
+  });
+  expect(bundleManifest.summary).toEqual(expect.objectContaining({
+    reviewed: 1,
+    referencedSources: 1,
+  }));
+  expect(bundleManifest.sources).toContainEqual(expect.objectContaining({
+    sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+    objectStatus: "retained",
   }));
 
   expect((await request.patch(`/api/cases/${firstCreation.case.id}`, {

@@ -40,8 +40,8 @@ Traceframe currently provides a complete first vertical slice:
   proposed, confirmed, or dismissed decisions with recorded rationale.
 - Server-derived case finding totals with responsive status and indicator-type
   filters that remain inside the workspace state.
-- Safe CSV and JSON downloads containing reviewed findings only, plus a focused
-  printable case summary for review and hand-off.
+- Safe CSV and JSON downloads containing reviewed findings only, a verified ZIP
+  bundle with hashed source provenance, and a focused printable case summary.
 - Atomic case and audit-event creation backed by a verified, monotonic global
   SHA-256 ledger.
 - Login throttling, same-origin mutation checks, request correlation, and
@@ -53,12 +53,12 @@ Traceframe currently provides a complete first vertical slice:
   worker.
 
 The Python worker publishes a health heartbeat, removes expired sessions, and
-processes durable ingestion and original-disposal jobs. The first ingestion slice is
-deliberately narrow: UTF-8 text-like files up to 1 MiB are integrity-checked,
-normalised, and scanned for email, URL, IPv4, domain, and strictly shaped
-SHA-256 observations. Analysts can promote those observations into audited
-findings. Binary evidence, large-file streaming, and richer parsers remain
-future work.
+processes durable ingestion and original-disposal jobs. The first ingestion
+slice is deliberately narrow: UTF-8 text-like files up to 1 MiB are
+integrity-checked, normalised, and scanned for email, URL, IPv4, domain, and
+strictly shaped SHA-256 observations. Analysts can promote those observations
+into audited findings. Binary evidence, large-file streaming, and richer
+parsers remain future work.
 
 ## Product flow
 
@@ -76,8 +76,8 @@ After signing in, the user stays within one protected workspace:
 8. Review its SHA-256 provenance, normalisation counts, and derived indicators.
 9. Promote a derived observation into a proposed finding, record an analyst
    note, then confirm or dismiss it with a rationale.
-10. Download the reviewed decisions as CSV or JSON, or print a concise case
-    summary without exposing pending proposals.
+10. Download reviewed decisions as CSV or JSON, create a verified ZIP hand-off
+    bundle with source provenance, or print a concise case summary.
 11. Open Relationships to inspect indicators repeated across ready sources.
 12. Close a resolved case after processing and finding reviews are complete;
     reopen it when further investigation is required.
@@ -262,7 +262,7 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases/:id/findings` | Return findings with case-level lifecycle and indicator summaries |
 | `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
 | `PATCH` | `/api/cases/:id/findings/:findingId` | Confirm or dismiss a proposed finding with rationale |
-| `GET` | `/api/cases/:id/findings/export?format=csv\|json` | Download reviewed findings in a safe, non-cacheable format |
+| `GET` | `/api/cases/:id/findings/export?format=csv\|json\|bundle` | Download reviewed findings or a verified provenance bundle |
 | `GET` | `/api/health` | Report web and database availability |
 
 ## Security and integrity choices
@@ -296,6 +296,9 @@ curl -fsS http://127.0.0.1:3000/api/health
 - Finding exports require an authenticated read capability and contain only
   confirmed or dismissed findings. Responses are non-cacheable, filenames use
   opaque case IDs, and CSV cells are neutralised against spreadsheet formulas.
+- Hand-off bundles additionally require a verified global audit ledger. Their
+  manifest hashes each included report and records only referenced source
+  provenance; original and normalised source content are explicitly excluded.
 - A locked PostgreSQL chain-head row assigns each global audit event a monotonic
   sequence and ensures concurrent writers extend one unambiguous head.
 - Server-side verification recalculates every canonical event digest and checks
@@ -390,6 +393,5 @@ automatic down-migrations are intentionally not provided.
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
 - Add a carefully bounded user-agent observation type.
-- Add reviewed-finding bundles with provenance manifests for controlled hand-off.
 - Introduce production operations for dead-letter jobs, metrics, alerting, and
   storage/database backup testing.
