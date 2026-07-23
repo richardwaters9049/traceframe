@@ -74,9 +74,16 @@ export const sourceMaterial = pgTable("source_material", {
   uploadedBy: uuid("uploaded_by").notNull().references(() => users.id, { onDelete: "restrict" }),
   status: text("status").notNull().default("queued"),
   failureReason: text("failure_reason"),
+  objectStatus: text("object_status").notNull().default("retained"),
+  disposalRequestedAt: timestamp("disposal_requested_at", { withTimezone: true }),
+  disposedAt: timestamp("disposed_at", { withTimezone: true }),
+  disposalFailureReason: text("disposal_failure_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   processedAt: timestamp("processed_at", { withTimezone: true }),
-}, (table) => [index("source_material_case_created_idx").on(table.caseId, table.createdAt.desc(), table.id.desc())]);
+}, (table) => [
+  index("source_material_case_created_idx").on(table.caseId, table.createdAt.desc(), table.id.desc()),
+  index("source_material_object_status_idx").on(table.objectStatus, table.disposalRequestedAt, table.id),
+]);
 
 export const ingestionJobs = pgTable("ingestion_jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -94,6 +101,21 @@ export const ingestionJobs = pgTable("ingestion_jobs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [index("ingestion_jobs_status_created_at_id_idx").on(table.status, table.createdAt, table.id)]);
+
+export const sourceDisposalJobs = pgTable("source_disposal_jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sourceId: uuid("source_id").notNull().references(() => sourceMaterial.id, { onDelete: "cascade" }).unique(),
+  status: text("status").notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(3),
+  lastError: text("last_error"),
+  availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  lockedBy: text("locked_by"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("source_disposal_jobs_claim_idx").on(table.status, table.availableAt, table.createdAt, table.id)]);
 
 export const normalisedSources = pgTable("normalised_sources", {
   sourceId: uuid("source_id").primaryKey().references(() => sourceMaterial.id, { onDelete: "cascade" }),

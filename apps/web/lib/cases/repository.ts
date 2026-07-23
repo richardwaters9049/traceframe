@@ -134,7 +134,8 @@ export async function updateCaseStatus(
       const [blockers] = await transaction<{ active_sources: string; proposed_findings: string }[]>`
         SELECT
           (SELECT count(*)::text FROM source_material
-            WHERE case_id = ${caseId} AND status IN ('queued', 'processing')) AS active_sources,
+            WHERE case_id = ${caseId}
+              AND (status IN ('queued', 'processing') OR object_status = 'disposal_pending')) AS active_sources,
           (SELECT count(*)::text FROM findings
             WHERE case_id = ${caseId} AND status = 'proposed') AS proposed_findings`;
       if (Number(blockers.active_sources) > 0) throw new Error("CASE_HAS_ACTIVE_SOURCES");

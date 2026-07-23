@@ -224,6 +224,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     },
   });
   expect(secondSourceUpload.status(), await secondSourceUpload.text()).toBe(202);
+  const secondSource = await secondSourceUpload.json() as { sourceId: string };
   await expect.poll(async () => {
     const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
     const body = await response.json() as { sources: Array<{ status: string }> };
@@ -263,6 +264,45 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     totalOccurrences: 2,
   }));
 
+  expect((await request.delete(
+    `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
+    { headers: { Origin: "https://untrusted.invalid" } },
+  )).status()).toBe(403);
+  expect((await request.delete(
+    `/api/cases/${firstCreation.case.id}/sources/not-a-source`,
+    { headers: { Origin: origin } },
+  )).status()).toBe(404);
+  const disposalResponse = await request.delete(
+    `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
+    { headers: { Origin: origin } },
+  );
+  expect(disposalResponse.status(), await disposalResponse.text()).toBe(202);
+  expect(await disposalResponse.json()).toEqual({
+    sourceId: secondSource.sourceId,
+    objectStatus: "disposal_pending",
+  });
+  await expect.poll(async () => {
+    const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+    const body = await response.json() as {
+      sources: Array<{ id: string; objectStatus: string; observations: unknown[] }>;
+    };
+    const disposed = body.sources.find((source) => source.id === secondSource.sourceId);
+    return { objectStatus: disposed?.objectStatus, observations: disposed?.observations.length };
+  }, { timeout: 20_000 }).toEqual({ objectStatus: "disposed", observations: 4 });
+  expect((await request.delete(
+    `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
+    { headers: { Origin: origin } },
+  )).status()).toBe(409);
+
+  const disposedWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
+  const disposedWorkspace = await disposedWorkspaceResponse.json() as {
+    workspace: { verification: { status: string }; auditEvents: Array<{ action: string }> };
+  };
+  expect(disposedWorkspace.workspace.verification.status).toBe("verified");
+  expect(disposedWorkspace.workspace.auditEvents.some(
+    (event) => event.action === "source.disposal_requested",
+  )).toBe(true);
+
   const pageResponse = await request.get("/api/cases?limit=2");
   expect(pageResponse.status()).toBe(200);
   const responseText = await pageResponse.text();
@@ -294,6 +334,10 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect((await request.get("/api/cases")).status()).toBe(401);
   expect((await request.get(`/api/cases/${firstCreation.case.id}/findings/export`)).status()).toBe(401);
   expect((await request.get(`/api/cases/${firstCreation.case.id}/correlations`)).status()).toBe(401);
+  expect((await request.delete(
+    `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
+    { headers: { Origin: origin } },
+  )).status()).toBe(401);
 
   const unknown = { email: `unknown-${runId}@traceframe.local`, password: "NotThePassword!2026" };
   let finalStatus = 0;

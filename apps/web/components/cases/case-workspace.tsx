@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Archive, ArrowLeft, Check, CircleCheckBig, CircleX, Clock3, Database,
   Download, Eye, FileText, Fingerprint, LoaderCircle, LockKeyhole, Printer, RefreshCw,
-  RotateCcw, SearchCheck, Upload, X,
+  RotateCcw, SearchCheck, ShieldCheck, ShieldOff, Upload, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -13,6 +13,7 @@ import { CaseLifecycleDialog } from "@/components/cases/case-lifecycle-dialog";
 import type { CaseWorkspaceRecord } from "@/components/cases/workspace-content";
 import { CasePrintSummary } from "@/components/cases/case-print-summary";
 import { CaseRelationships } from "@/components/cases/case-relationships";
+import { SourceDisposalDialog } from "@/components/cases/source-disposal-dialog";
 import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import type { CaseRecord } from "@/lib/cases/contracts";
 import type { FindingRecord } from "@/lib/findings/contracts";
@@ -37,6 +38,7 @@ function readableBytes(value: number) {
 
 function auditLabel(action: string) {
   if (action === "source.uploaded") return "Source uploaded";
+  if (action === "source.disposal_requested") return "Source disposal requested";
   if (action === "finding.proposed") return "Finding proposed";
   if (action === "finding.confirmed") return "Finding confirmed";
   if (action === "finding.dismissed") return "Finding dismissed";
@@ -69,6 +71,11 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
   const [lifecycleOpener, setLifecycleOpener] = useState<HTMLElement | null>(null);
   const [lifecycleMessage, setLifecycleMessage] = useState<string | null>(null);
+  const [disposalSource, setDisposalSource] = useState<SourceRecord | null>(null);
+  const [disposalBusy, setDisposalBusy] = useState(false);
+  const [disposalError, setDisposalError] = useState<string | null>(null);
+  const [disposalOpener, setDisposalOpener] = useState<HTMLElement | null>(null);
+  const [disposalMessage, setDisposalMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isClosed = record.status === "closed";
   const createdAt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt));
@@ -76,6 +83,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
     ? "Global ledger verified"
     : verification.status === "broken" ? "Ledger integrity failed" : "Verification unavailable";
   const processing = sources.some((source) => source.status === "queued" || source.status === "processing");
+  const sourceActivity = processing || sources.some((source) => source.objectStatus === "disposal_pending");
   const observations = sources.flatMap((source) => source.observations.map((observation) => ({ ...observation, sourceFilename: source.originalFilename })));
   const promotedObservationIds = new Set(findings.map((finding) => finding.observationId));
   const availableObservations = observations.filter((observation) => !promotedObservationIds.has(observation.id));
@@ -138,8 +146,39 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
     setLifecycleBusy(false);
   }
 
+  function openDisposalDialog(source: SourceRecord, opener: HTMLElement) {
+    setDisposalSource(source);
+    setDisposalOpener(opener);
+    setDisposalError(null);
+  }
+
+  function closeDisposalDialog() {
+    if (disposalBusy) return;
+    setDisposalSource(null);
+    setDisposalError(null);
+  }
+
+  async function confirmSourceDisposal() {
+    if (!disposalSource || disposalBusy) return;
+    setDisposalBusy(true);
+    setDisposalError(null);
+    setDisposalMessage(null);
+    const result = await apiRequest<{ sourceId: string; objectStatus: SourceRecord["objectStatus"] }>(
+      `/api/cases/${encodeURIComponent(record.id)}/sources/${encodeURIComponent(disposalSource.id)}`,
+      { method: "DELETE" },
+    );
+    if (result.ok) {
+      await refreshWorkspace();
+      setDisposalMessage("Original disposal queued. Provenance and derived analysis are preserved.");
+      setDisposalSource(null);
+    } else {
+      setDisposalError(result.error);
+    }
+    setDisposalBusy(false);
+  }
+
   useEffect(() => {
-    if (!processing) return;
+    if (!sourceActivity) return;
     const controller = new AbortController();
     const refresh = async () => {
       const result = await apiRequest<{ sources: SourceRecord[] }>(
@@ -149,7 +188,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
     };
     const timer = window.setInterval(() => void refresh(), 2_000);
     return () => { controller.abort(); window.clearInterval(timer); };
-  }, [processing, record.id]);
+  }, [sourceActivity, record.id]);
 
   async function uploadSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,16 +286,33 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
             </motion.div>
           ) : tab === "sources" ? (
             <motion.div key="sources" role="tabpanel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="min-h-[28rem] min-w-0 rounded-[1.5rem] border border-white/[0.07] bg-navigation p-5 sm:p-7">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><Database className="size-5" /></span><div><h2 className="ui-section-title">Source material</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Originals secured · analysis derived</p></div></div>{processing ? <span className="ui-meta inline-flex items-center gap-2 text-[#9AA7FF]"><RefreshCw className="size-4 animate-spin" />Processing updates live</span> : null}</div>
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><Database className="size-5" /></span><div><h2 className="ui-section-title">Source material</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Originals retained by policy · analysis derived</p></div></div>{sourceActivity ? <span className="ui-meta inline-flex items-center gap-2 text-[#9AA7FF]"><RefreshCw className="size-4 animate-spin" />Lifecycle updates live</span> : null}</div>
 
               {!isClosed ? <form onSubmit={uploadSource} className="mt-6 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.035] p-4 sm:p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center"><label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0D1118] px-4 py-3 transition hover:border-primary/35"><Upload className="size-5 shrink-0 text-[#8796FF]" /><span className="min-w-0"><span className="ui-label block truncate text-[#DDE2EA]">{selectedFile?.name ?? "Choose synthetic source"}</span><span className="ui-meta mt-0.5 block text-[#9FA9B8]">UTF-8 TXT, LOG, CSV or JSON · 1 MiB maximum</span></span><input ref={inputRef} type="file" name="file" accept=".txt,.log,.csv,.json,text/plain,text/csv,application/json" className="sr-only" onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setMessage(null); }} /></label><button type="submit" disabled={!selectedFile || uploading} className="ui-label inline-flex min-w-32 cursor-pointer items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-background transition hover:bg-primary-hover hover:text-white disabled:cursor-not-allowed disabled:opacity-45">{uploading ? <LoaderCircle className="size-4 animate-spin" /> : <Upload className="size-4" />}{uploading ? "Securing…" : "Upload"}</button></div>
-                {message ? <p role={message.tone === "error" ? "alert" : "status"} className={`ui-meta mt-3 flex items-center gap-2 ${message.tone === "error" ? "text-[#FF9BA7]" : "text-[#76E2D5]"}`}>{message.tone === "error" ? <AlertTriangle className="size-4" /> : <Check className="size-4" />}{message.text}</p> : null}
               </form> : <p className="ui-meta mt-6 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-[#AAB3C1]">Source upload is unavailable while this case is closed.</p>}
+              {message ? <p role={message.tone === "error" ? "alert" : "status"} className={`ui-meta mt-3 flex items-center gap-2 ${message.tone === "error" ? "text-[#FF9BA7]" : "text-[#76E2D5]"}`}>{message.tone === "error" ? <AlertTriangle className="size-4" /> : <Check className="size-4" />}{message.text}</p> : null}
+              {disposalMessage ? <p role="status" className="ui-meta mt-3 flex items-center gap-2 text-[#76E2D5]"><ShieldCheck className="size-4" />{disposalMessage}</p> : null}
 
               <div className="mt-5 space-y-3">
                 {!sources.length ? <div className="grid min-h-48 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.012] p-8 text-center"><div><Eye className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No source material yet</p><p className="ui-meta mt-2 text-[#AAB3C1]">The original stays in object storage; only provenance and derived analysis appear here.</p></div></div> : null}
-                {sources.map((source) => <article key={source.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="ui-section-title truncate">{source.originalFilename}</p><p className="ui-meta mt-1 text-[#AAB3C1]">{readableBytes(source.sizeBytes)} · {source.mediaType} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(source.createdAt))}</p></div><span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${statusStyles(source.status)}`}>{source.status === "queued" || source.status === "processing" ? <LoaderCircle className="size-3.5 animate-spin" /> : source.status === "ready" ? <Check className="size-3.5" /> : <X className="size-3.5" />}{source.status}</span></div><p className="ui-meta mt-3 truncate font-mono text-[#8993A4]" title={source.sha256}>SHA-256 {source.sha256}</p>{source.status === "ready" ? <><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Characters</p><p className="ui-section-title mt-1">{source.characterCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Lines</p><p className="ui-section-title mt-1">{source.lineCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Words</p><p className="ui-section-title mt-1">{source.wordCount}</p></div></div>{source.observations.length ? <div className="mt-4 flex flex-wrap gap-2">{source.observations.map((observation) => <span key={observation.id} className="ui-meta max-w-full truncate rounded-lg bg-[#58D6C7]/[0.055] px-2.5 py-1.5 text-[#8FDCD3] ring-1 ring-inset ring-[#58D6C7]/10">{observationKindLabel(observation.kind)} · {observation.value}{observation.occurrences > 1 ? ` ×${observation.occurrences}` : ""}</span>)}</div> : <p className="ui-meta mt-4 text-[#9FA9B8]">No supported indicators were derived.</p>}</> : null}{source.failureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.failureReason}</p> : null}</article>)}
+                {sources.map((source) => <article key={source.id} className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0"><p className="ui-section-title truncate">{source.originalFilename}</p><p className="ui-meta mt-1 text-[#AAB3C1]">{readableBytes(source.sizeBytes)} · {source.mediaType} · {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(source.createdAt))}</p></div>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${statusStyles(source.status)}`}>{source.status === "queued" || source.status === "processing" ? <LoaderCircle className="size-3.5 animate-spin" /> : source.status === "ready" ? <Check className="size-3.5" /> : <X className="size-3.5" />}{source.status}</span>
+                      <span className={`ui-eyebrow inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 ring-1 ring-inset ${source.objectStatus === "retained" ? "bg-[#58D6C7]/10 text-[#76E2D5] ring-[#58D6C7]/20" : source.objectStatus === "disposed" ? "bg-white/[0.045] text-[#AEB7C5] ring-white/[0.08]" : source.objectStatus === "disposal_failed" ? "bg-[#FF7D8D]/10 text-[#FF9BA7] ring-[#FF7D8D]/20" : "bg-amber-300/[0.08] text-amber-200 ring-amber-200/15"}`}>
+                        {source.objectStatus === "disposal_pending" ? <LoaderCircle className="size-3.5 animate-spin" /> : source.objectStatus === "retained" ? <ShieldCheck className="size-3.5" /> : <ShieldOff className="size-3.5" />}
+                        {source.objectStatus === "retained" ? "original retained" : source.objectStatus === "disposal_pending" ? "disposal queued" : source.objectStatus === "disposed" ? "original disposed" : "disposal failed"}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="ui-meta mt-3 truncate font-mono text-[#8993A4]" title={source.sha256}>SHA-256 {source.sha256}</p>
+                  {source.status === "ready" ? <><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Characters</p><p className="ui-section-title mt-1">{source.characterCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Lines</p><p className="ui-section-title mt-1">{source.lineCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Words</p><p className="ui-section-title mt-1">{source.wordCount}</p></div></div>{source.observations.length ? <div className="mt-4 flex flex-wrap gap-2">{source.observations.map((observation) => <span key={observation.id} className="ui-meta max-w-full truncate rounded-lg bg-[#58D6C7]/[0.055] px-2.5 py-1.5 text-[#8FDCD3] ring-1 ring-inset ring-[#58D6C7]/10">{observationKindLabel(observation.kind)} · {observation.value}{observation.occurrences > 1 ? ` ×${observation.occurrences}` : ""}</span>)}</div> : <p className="ui-meta mt-4 text-[#9FA9B8]">No supported indicators were derived.</p>}</> : null}
+                  {source.failureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.failureReason}</p> : null}
+                  {source.disposalFailureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.disposalFailureReason}</p> : null}
+                  {!isClosed && workspace.capabilities.canDisposeSources && (source.objectStatus === "retained" || source.objectStatus === "disposal_failed") && source.status !== "queued" && source.status !== "processing" ? <div className="mt-4 flex justify-end border-t border-white/[0.06] pt-4"><button type="button" aria-label={`${source.objectStatus === "disposal_failed" ? "Retry disposal for" : "Dispose original"} ${source.originalFilename}`} onClick={(event) => openDisposalDialog(source, event.currentTarget)} className="ui-meta inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#FF7D8D]/15 bg-[#FF7D8D]/[0.045] px-3.5 py-2.5 text-[#FFABB5] transition hover:border-[#FF7D8D]/30 hover:bg-[#FF7D8D]/[0.08]"><ShieldOff className="size-4" />{source.objectStatus === "disposal_failed" ? "Retry disposal" : "Dispose original"}</button></div> : null}
+                </article>)}
               </div>
             </motion.div>
           ) : tab === "findings" ? (
@@ -322,6 +378,14 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
         opener={lifecycleOpener}
         onClose={closeLifecycleDialog}
         onConfirm={() => void confirmLifecycleChange()}
+      />
+      <SourceDisposalDialog
+        source={disposalSource}
+        busy={disposalBusy}
+        error={disposalError}
+        opener={disposalOpener}
+        onClose={closeDisposalDialog}
+        onConfirm={() => void confirmSourceDisposal()}
       />
     </section>
   );

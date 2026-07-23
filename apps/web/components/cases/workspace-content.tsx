@@ -20,7 +20,12 @@ export type CaseWorkspaceRecord = {
   sources: SourceRecord[];
   findings: FindingRecord[];
   findingSummary: FindingSummary;
-  capabilities: { canManageCase: boolean; canCreateFindings: boolean; canReviewFindings: boolean };
+  capabilities: {
+    canManageCase: boolean;
+    canDisposeSources: boolean;
+    canCreateFindings: boolean;
+    canReviewFindings: boolean;
+  };
 };
 
 export function WorkspaceContent({ initialPage, verification }: { initialPage: CaseCursorPage; verification: AuditVerification }) {

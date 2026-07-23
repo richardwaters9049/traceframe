@@ -87,6 +87,10 @@ Keep these current boundaries intact:
   IPv4, domain, and embedded SHA-256 observations.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
+- Original source objects are retained by default. An authenticated analyst or
+  admin may queue disposal only after ingestion is terminal and while the case
+  is open. The worker retries idempotent deletion; provenance, normalised
+  analysis, observations, findings, and audit history remain after disposal.
 - One derived observation may be promoted into one finding. Findings begin as
   `proposed` and may transition once to `confirmed` or `dismissed` with a
   required rationale.
@@ -114,7 +118,7 @@ Keep these current boundaries intact:
   limitations. Never silently replace the paid production topology with it.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
-parsers, additional observation types, source retention controls, and
+parsers, additional observation types, automatic time-based retention, and
 production dead-letter operations are planned product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.
@@ -132,11 +136,14 @@ debt from the 19/07/2026 review.
   normalised email lookup, and uniqueness on `lower(email)`.
 - Require explicit same-origin validation on every state-changing Route Handler.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
-  read/create/close/reopen cases, upload sources, and manage findings;
+  read/create/close/reopen cases, upload and dispose original sources, and manage findings;
   `reviewer` is read-only, and unknown roles fail closed.
 - Preserve case-row locking across lifecycle transitions, source uploads,
-  finding proposals, and finding reviews so closed cases cannot accept
-  concurrent writes.
+  source-disposal requests, finding proposals, and finding reviews so closed
+  cases cannot accept concurrent writes.
+- Keep source disposal durable and idempotent. Never delete provenance or
+  derived analysis with the original object, and never report disposal complete
+  until the worker has reconciled object storage and PostgreSQL.
 - Keep finding exports restricted to terminal reviewed records. Preserve
   non-cacheable responses, opaque filenames, and spreadsheet-formula
   neutralisation for CSV values.

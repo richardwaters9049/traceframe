@@ -33,6 +33,10 @@ export type SourceRecord = {
   sha256: string;
   status: "queued" | "processing" | "ready" | "failed";
   failureReason: string | null;
+  objectStatus: "retained" | "disposal_pending" | "disposed" | "disposal_failed";
+  disposalRequestedAt: string | null;
+  disposedAt: string | null;
+  disposalFailureReason: string | null;
   createdAt: string;
   processedAt: string | null;
   characterCount: number | null;
@@ -69,3 +73,4 @@ export function validateSourceUpload(value: { name: string; type: string; size: 
 }
 
 export const caseIdSchema = z.string().uuid();
+export const sourceIdSchema = z.string().uuid();

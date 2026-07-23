@@ -20,8 +20,8 @@ Next.js web and API ------> PostgreSQL
 ```
 
 The worker maintains its health heartbeat, removes expired sessions hourly, and
-processes durable ingestion jobs. It remains an internal polling process rather
-than an HTTP service.
+processes durable ingestion and source-disposal jobs. It remains an internal
+polling process rather than an HTTP service.
 
 ## Production topology
 
@@ -77,8 +77,26 @@ retry delays and become terminal after three attempts without exposing source
 content in logs or error text.
 
 The case workspace loads source summaries on demand. While any source is queued
-or processing, the client polls the narrow source endpoint every two seconds;
-polling stops once all sources reach ready or failed state.
+or processing, or an original is awaiting disposal, the client polls the narrow
+source endpoint every two seconds. Polling stops once all ingestion and disposal
+work reaches a terminal state.
+
+## Source retention and disposal
+
+Original objects are retained by default with no automatic expiry. An analyst
+or admin may request permanent disposal through the same-origin
+`DELETE /api/cases/:id/sources/:sourceId` boundary after ingestion reaches a
+terminal state. The open case and source rows are locked before the disposal
+job, `disposal_pending` state, and `source.disposal_requested` audit event are
+committed atomically. Closed cases reject disposal requests.
+
+The worker claims disposal jobs with the same bounded lease-and-retry pattern as
+ingestion. Object deletion is idempotent: if storage deletion succeeds but the
+database update is interrupted, a retry safely reconciles PostgreSQL to
+`disposed`. Terminal storage failures become `disposal_failed` and can be
+explicitly retried. Disposal removes only the original object; the source
+record, SHA-256 digest, normalised analysis, observations, findings, and audit
+history remain as provenance.
 
 ## Analyst findings
 
@@ -142,8 +160,8 @@ case audit histories. Selecting a case keeps navigation state inside
 
 Analysts and admins can transition a case between `open` and `closed` through
 the same-origin `PATCH /api/cases/:id` boundary. The transaction locks the case
-row, rejects duplicate transitions, blocks closure while a source is queued or
-processing or a finding remains proposed, updates the case, and appends
+row, rejects duplicate transitions, blocks closure while ingestion or source
+disposal is active or a finding remains proposed, updates the case, and appends
 `case.closed` or `case.reopened` to the global audit ledger atomically.
 
 Source upload, finding proposal, and finding review transactions also lock the
@@ -182,10 +200,10 @@ Responses include request IDs and server logs use structured event records
 without credentials or session tokens.
 
 Role capabilities are explicit and fail closed: `analyst` and `admin` may read,
-create, close, and reopen cases, upload sources, and manage findings; `reviewer`
-may read only, and unknown roles receive no case access. This is workspace-level
-authorisation; case ownership or membership must be designed before cases are
-shared across separate workspaces.
+create, close, and reopen cases, upload and dispose original sources, and manage
+findings; `reviewer` may read only, and unknown roles receive no case access.
+This is workspace-level authorisation; case ownership or membership must be
+designed before cases are shared across separate workspaces.
 
 ## Schema lifecycle
 

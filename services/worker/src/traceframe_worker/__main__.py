@@ -7,6 +7,10 @@ import psycopg
 
 from traceframe_worker.config import Settings
 from traceframe_worker.ingestion import create_minio_client, process_one_job, recover_stale_jobs
+from traceframe_worker.source_disposal import (
+    process_one_disposal_job,
+    recover_stale_disposal_jobs,
+)
 
 READY_FILE = Path("/tmp/traceframe-worker-ready")
 
@@ -51,9 +55,12 @@ def main() -> None:
         settings.minio_region,
     )
     recovered = recover_stale_jobs(database_url)
+    recovered_disposals = recover_stale_disposal_jobs(database_url)
     logger.info("worker_ready pid=%s", os.getpid())
     if recovered:
         logger.warning("ingestion_leases_recovered count=%s", recovered)
+    if recovered_disposals:
+        logger.warning("source_disposal_leases_recovered count=%s", recovered_disposals)
 
     last_cleanup: float | None = None
     while True:
@@ -62,7 +69,18 @@ def main() -> None:
             deleted = cleanup_expired_sessions(database_url)
             logger.info("session_cleanup_complete deleted=%s", deleted)
             last_cleanup = current_time
-        job = process_one_job(database_url, minio_client, settings.minio_bucket, settings.worker_id)
+        disposal_job = process_one_disposal_job(
+            database_url, minio_client, settings.minio_bucket, settings.worker_id
+        )
+        if disposal_job:
+            logger.info(
+                "source_disposal_job_attempted job_id=%s source_id=%s",
+                disposal_job.id,
+                disposal_job.source_id,
+            )
+        job = process_one_job(
+            database_url, minio_client, settings.minio_bucket, settings.worker_id
+        )
         if job:
             logger.info("ingestion_job_attempted job_id=%s source_id=%s", job.id, job.source_id)
         READY_FILE.touch()
