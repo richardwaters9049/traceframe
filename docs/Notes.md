@@ -38,3 +38,9 @@ correlation workflow.
 Added the production delivery foundation: gated GitHub CI, Render infrastructure
 for web, worker, PostgreSQL, and private MinIO, concurrent-safe migrations, and a
 protected-main branching and operations runbook.
+
+## 23/07/2026
+
+Added a portfolio deployment profile using one supervised Render web
+container, Neon PostgreSQL, and Cloudflare R2 while retaining the separate paid
+production architecture.

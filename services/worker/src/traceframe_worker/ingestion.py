@@ -35,13 +35,14 @@ class IngestionJob:
     max_attempts: int
 
 
-def create_minio_client(endpoint: str, access_key: str, secret_key: str) -> Minio:
+def create_minio_client(endpoint: str, access_key: str, secret_key: str, region: str) -> Minio:
     endpoint_value = endpoint.removeprefix("http://").removeprefix("https://").rstrip("/")
     return Minio(
         endpoint_value,
         access_key=access_key,
         secret_key=secret_key,
         secure=endpoint.startswith("https://"),
+        region=region,
     )
 
 

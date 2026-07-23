@@ -1,7 +1,11 @@
 #!/bin/sh
 set -eu
 
-if [ -n "${DATABASE_URL:-}" ]; then
+if [ -n "${MIGRATION_DATABASE_URL:-}" ]; then
+  run_psql() {
+    psql "$MIGRATION_DATABASE_URL" "$@"
+  }
+elif [ -n "${DATABASE_URL:-}" ]; then
   run_psql() {
     psql "$DATABASE_URL" "$@"
   }

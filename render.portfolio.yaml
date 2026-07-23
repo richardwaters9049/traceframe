@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: traceframe-web
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./deploy/render/portfolio.Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - apps/web/**
+        - services/worker/**
+        - db/seed-demo-user.sql
+        - scripts/**
+        - deploy/render/portfolio.Dockerfile
+        - deploy/render/portfolio-supervisor.py
+        - render.portfolio.yaml
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_THROTTLE_SECRET
+        generateValue: true
+      - key: AUTH_DEMO_EMAIL
+        value: analyst@traceframe.local
+      - key: AUTH_DEMO_NAME
+        value: Morgan Reed
+      - key: AUTH_DEMO_PASSWORD
+        sync: false
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_BUCKET
+        value: traceframe-source-material
+      - key: MINIO_REGION
+        value: auto
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: POLL_INTERVAL_SECONDS
+        value: "5"
+      - key: WORKER_ID
+        value: traceframe-portfolio-worker

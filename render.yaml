@@ -38,6 +38,8 @@ services:
           property: hostport
       - key: MINIO_BUCKET
         value: case-source-material
+      - key: MINIO_REGION
+        value: us-east-1
       - key: MINIO_ACCESS_KEY
         fromService:
           name: traceframe-minio
@@ -81,6 +83,8 @@ services:
           property: hostport
       - key: MINIO_BUCKET
         value: case-source-material
+      - key: MINIO_REGION
+        value: us-east-1
       - key: MINIO_ACCESS_KEY
         fromService:
           name: traceframe-minio

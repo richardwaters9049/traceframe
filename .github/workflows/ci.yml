@@ -39,7 +39,7 @@ jobs:
       - name: Install worker dependencies
         run: python -m pip install -r services/worker/requirements.txt -r services/worker/requirements-dev.txt pip-audit==2.9.0
       - name: Lint and test worker
-        run: python -m ruff check services/worker/src services/worker/tests && python -m pytest -q services/worker/tests && python -m compileall -q services/worker/src
+        run: python -m ruff check services/worker/src services/worker/tests deploy/render/portfolio-supervisor.py && python -m pytest -q services/worker/tests && python -m compileall -q services/worker/src deploy/render/portfolio-supervisor.py
       - name: Audit Python dependencies
         run: python -m pip_audit -r services/worker/requirements.txt
       - name: Build Render production images
@@ -47,6 +47,7 @@ jobs:
           docker build --file deploy/render/web.Dockerfile --tag traceframe-render-web:ci .
           docker build --file deploy/render/worker.Dockerfile --tag traceframe-render-worker:ci .
           docker build --file deploy/render/minio.Dockerfile --tag traceframe-render-minio:ci .
+          docker build --file deploy/render/portfolio.Dockerfile --tag traceframe-render-portfolio:ci .
       - name: Install browser
         working-directory: apps/web
         run: bunx playwright install --with-deps chromium firefox webkit

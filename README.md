@@ -94,7 +94,7 @@ Legacy case and architecture URLs redirect safely back to `/dashboard`.
 | Object storage | MinIO |
 | Background processing | Python 3.14, psycopg, Pydantic Settings |
 | Local orchestration | Docker Compose |
-| Production hosting | Render Blueprint, managed PostgreSQL, private MinIO |
+| Online hosting | Render production and portfolio Blueprints |
 
 Next.js owns both the browser interface and its same-origin HTTP boundary.
 There is no separate browser-facing Python API and no CORS dependency in the
@@ -326,6 +326,13 @@ work; GitHub Actions represents test; Render represents production. See the
 [branching and release workflow](docs/BRANCHING.md) for the exact practice and
 recommended GitHub ruleset.
 
+For a zero-cost portfolio demonstration, `render.portfolio.yaml` defines one Render
+Free Web Service backed by Neon Free PostgreSQL and Cloudflare R2. Next.js and
+the worker run as separately supervised processes in that one container. This
+preserves the complete application flow while accepting cold starts and no
+production service guarantee. Follow the [portfolio deployment guide](docs/PORTFOLIO_DEPLOYMENT.md)
+and use the paid topology whenever reliability or data recovery matters.
+
 ## Repository structure
 
 ```text
@@ -339,6 +346,7 @@ traceframe/
 ├── compose.yaml           Container topology and health checks
 ├── compose.dev.yaml       Bind-mounted web development and Fast Refresh
 ├── render.yaml            Render production infrastructure definition
+├── render.portfolio.yaml  Render portfolio deployment definition
 ├── Makefile               Common build, test, and lifecycle commands
 └── AGENTS.md              Project guidance for coding agents
 ```
@@ -348,6 +356,7 @@ Further detail is available in:
 - [Architecture](docs/ARCHITECTURE.md)
 - [Branching and releases](docs/BRANCHING.md)
 - [Production deployment](docs/DEPLOYMENT.md)
+- [Portfolio deployment](docs/PORTFOLIO_DEPLOYMENT.md)
 - [Brand system](docs/BRAND.md)
 - [Technical debt review — 19/07/2026](docs/tech_debt/19-07-2026.md)
 - [Technical debt resolution — 20/07/2026](docs/tech_debt/20-07-2026.md)
