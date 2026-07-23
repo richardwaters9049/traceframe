@@ -26,6 +26,12 @@ export type SourceUploadInput = {
 };
 
 export type SourceObservation = { id: string; kind: ObservationKind; value: string; occurrences: number };
+export type SourceIngestionJob = {
+  status: "pending" | "processing" | "retry" | "completed" | "failed";
+  attempts: number;
+  maxAttempts: number;
+  updatedAt: string;
+};
 export type SourceRecord = {
   id: string;
   originalFilename: string;
@@ -43,6 +49,7 @@ export type SourceRecord = {
   characterCount: number | null;
   lineCount: number | null;
   wordCount: number | null;
+  ingestion: SourceIngestionJob;
   observations: SourceObservation[];
 };
 

@@ -9,6 +9,7 @@ describe("workspace authorisation", () => {
     expect(can({ role: "analyst" }, "cases:update")).toBe(true);
     expect(can({ role: "analyst" }, "sources:create")).toBe(true);
     expect(can({ role: "analyst" }, "sources:dispose")).toBe(true);
+    expect(can({ role: "analyst" }, "sources:retry")).toBe(true);
     expect(can({ role: "analyst" }, "findings:create")).toBe(true);
     expect(can({ role: "analyst" }, "findings:review")).toBe(true);
   });
@@ -19,10 +20,12 @@ describe("workspace authorisation", () => {
     expect(can({ role: "reviewer" }, "cases:update")).toBe(false);
     expect(can({ role: "reviewer" }, "sources:create")).toBe(false);
     expect(can({ role: "reviewer" }, "sources:dispose")).toBe(false);
+    expect(can({ role: "reviewer" }, "sources:retry")).toBe(false);
     expect(can({ role: "reviewer" }, "findings:create")).toBe(false);
     expect(can({ role: "reviewer" }, "findings:review")).toBe(false);
     expect(can({ role: "unknown" }, "cases:read")).toBe(false);
     expect(can({ role: "unknown" }, "sources:create")).toBe(false);
     expect(can({ role: "unknown" }, "sources:dispose")).toBe(false);
+    expect(can({ role: "unknown" }, "sources:retry")).toBe(false);
   });
 });

@@ -23,6 +23,7 @@ export type CaseWorkspaceRecord = {
   capabilities: {
     canManageCase: boolean;
     canDisposeSources: boolean;
+    canRetrySources: boolean;
     canCreateFindings: boolean;
     canReviewFindings: boolean;
   };

@@ -86,6 +86,10 @@ Keep these current boundaries intact:
 - The Python worker claims jobs with `FOR UPDATE SKIP LOCKED`, verifies source
   integrity, normalises text, retries safely, and derives counted email, URL,
   IPv4, domain, embedded SHA-256, and bounded user-agent observations.
+- Terminal ingestion failures expose only sanitised failure state and bounded
+  attempt counts. An analyst or admin may requeue a failed source only while
+  its case is open and its original remains retained; the job reset, source
+  transition, and `source.ingestion_retried` audit event commit atomically.
 - The case workspace shows processing status, SHA-256 provenance, normalisation
   counts, and derived observations without exposing original content.
 - Original source objects are retained by default. An authenticated analyst or
@@ -128,7 +132,7 @@ Keep these current boundaries intact:
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
 parsers, further observation types, automatic time-based retention, and
-production dead-letter operations are planned product work. Do not describe
+production operations dashboards and alerting are planned product work. Do not describe
 those features as implemented, and do not treat their absence as unresolved
 debt from the 19/07/2026 review.
 
@@ -145,7 +149,8 @@ debt from the 19/07/2026 review.
   normalised email lookup, and uniqueness on `lower(email)`.
 - Require explicit same-origin validation on every state-changing Route Handler.
 - Enforce role capabilities at the server boundary: `analyst` and `admin` may
-  read/create/close/reopen cases, upload and dispose original sources, and manage findings;
+  read/create/close/reopen cases, upload, retry and dispose original sources,
+  and manage findings;
   `reviewer` is read-only, and unknown roles fail closed.
 - Preserve case-row locking across lifecycle transitions, source uploads,
   source-disposal requests, finding proposals, and finding reviews so closed
@@ -153,6 +158,10 @@ debt from the 19/07/2026 review.
 - Keep source disposal durable and idempotent. Never delete provenance or
   derived analysis with the original object, and never report disposal complete
   until the worker has reconciled object storage and PostgreSQL.
+- Keep ingestion recovery restricted to terminal failed jobs with retained
+  originals in open cases. Reset the existing single job rather than creating
+  duplicates, clear only sanitised failure state, and append the retry audit
+  event in the same transaction.
 - Keep finding exports restricted to terminal reviewed records. Preserve
   non-cacheable responses, opaque filenames, and spreadsheet-formula
   neutralisation for CSV values.

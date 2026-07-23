@@ -80,6 +80,18 @@ job atomically. Failures use bounded exponential retry delays and become
 terminal after three attempts without exposing source content in logs or error
 text.
 
+Terminal ingestion recovery is explicit rather than automatic. The source read
+model exposes the sanitised failure reason and bounded job attempt counts. An
+analyst or admin can call
+`POST /api/cases/:id/sources/:sourceId/retry` only while the case is open, the
+source and its single ingestion job are both terminally failed, and the
+original object is still marked retained. The transaction locks the case,
+source, job, and global audit head; resets the existing job to `pending`, moves
+the source to `queued`, appends `source.ingestion_retried`, and advances the
+ledger head together. Concurrent or repeated requests observe the new state and
+fail closed. The worker then uses its ordinary claim, integrity, normalisation,
+and completion path.
+
 The case workspace loads source summaries on demand. While any source is queued
 or processing, or an original is awaiting disposal, the client polls the narrow
 source endpoint every two seconds. Polling stops once all ingestion and disposal

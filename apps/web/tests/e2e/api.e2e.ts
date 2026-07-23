@@ -1,12 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 
+import { executeIntegrationSql } from "./integration-sql";
+
 const credentials = { email: "analyst@traceframe.local", password: "Traceframe!2026" };
 const applicationOrigin = new URL(
   process.env.TRACEFRAME_BASE_URL ?? "http://127.0.0.1:3000",
 ).origin;
 
 test("API boundaries, pagination, concurrency, revocation, and throttling", async ({ request }, testInfo) => {
+  test.setTimeout(120_000);
   test.skip(testInfo.project.name !== "chromium", "API boundary coverage runs once");
   const origin = applicationOrigin;
 
@@ -362,6 +365,105 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect(disposedWorkspace.workspace.verification.status).toBe("verified");
   expect(disposedWorkspace.workspace.auditEvents.some(
     (event) => event.action === "source.disposal_requested",
+  )).toBe(true);
+
+  const recoveryUploadResponse = await request.post(
+    `/api/cases/${firstCreation.case.id}/sources`,
+    {
+      headers: { Origin: origin },
+      multipart: {
+        file: {
+          name: "synthetic-recovery-source.txt",
+          mimeType: "text/plain",
+          buffer: Buffer.from(
+            "Synthetic recovery record only.\nUser-Agent: TraceframeRecovery/1.0",
+          ),
+        },
+      },
+    },
+  );
+  expect(recoveryUploadResponse.status(), await recoveryUploadResponse.text()).toBe(202);
+  const recoverySource = await recoveryUploadResponse.json() as { sourceId: string };
+  await expect.poll(async () => {
+    const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+    const body = await response.json() as {
+      sources: Array<{ id: string; status: string }>;
+    };
+    return body.sources.find((source) => source.id === recoverySource.sourceId)?.status;
+  }, { timeout: 20_000 }).toBe("ready");
+
+  const retryPath = `/api/cases/${firstCreation.case.id}/sources/${recoverySource.sourceId}/retry`;
+  expect((await request.post(retryPath, {
+    headers: { Origin: "https://untrusted.invalid" },
+  })).status()).toBe(403);
+  expect((await request.post(retryPath, { headers: { Origin: origin } })).status()).toBe(409);
+
+  await executeIntegrationSql(`
+    UPDATE ingestion_jobs
+    SET status = 'failed', attempts = max_attempts,
+      last_error = 'RuntimeError: source processing failed', updated_at = now()
+    WHERE source_id = '${recoverySource.sourceId}'::uuid;
+    UPDATE source_material
+    SET status = 'failed', failure_reason = 'RuntimeError: source processing failed'
+    WHERE id = '${recoverySource.sourceId}'::uuid;
+  `);
+
+  const failedSourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+  const failedSources = await failedSourcesResponse.json() as {
+    sources: Array<{
+      id: string;
+      status: string;
+      failureReason: string | null;
+      ingestion: { status: string; attempts: number; maxAttempts: number };
+    }>;
+  };
+  expect(failedSources.sources).toContainEqual(expect.objectContaining({
+    id: recoverySource.sourceId,
+    status: "failed",
+    failureReason: "RuntimeError: source processing failed",
+    ingestion: expect.objectContaining({ status: "failed", attempts: 3, maxAttempts: 3 }),
+  }));
+
+  const retryResponse = await request.post(retryPath, { headers: { Origin: origin } });
+  expect(retryResponse.status(), await retryResponse.text()).toBe(202);
+  expect(await retryResponse.json()).toEqual({
+    sourceId: recoverySource.sourceId,
+    status: "queued",
+  });
+  expect((await request.post(retryPath, { headers: { Origin: origin } })).status()).toBe(409);
+
+  await expect.poll(async () => {
+    const response = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
+    const body = await response.json() as {
+      sources: Array<{
+        id: string;
+        status: string;
+        failureReason: string | null;
+        ingestion: { status: string; attempts: number; maxAttempts: number };
+      }>;
+    };
+    const source = body.sources.find((item) => item.id === recoverySource.sourceId);
+    return source && {
+      status: source.status,
+      failureReason: source.failureReason,
+      ingestion: source.ingestion,
+    };
+  }, { timeout: 20_000 }).toEqual({
+    status: "ready",
+    failureReason: null,
+    ingestion: expect.objectContaining({ status: "completed", attempts: 1, maxAttempts: 3 }),
+  });
+
+  const recoveredWorkspaceResponse = await request.get(`/api/cases/${firstCreation.case.id}`);
+  const recoveredWorkspace = await recoveredWorkspaceResponse.json() as {
+    workspace: {
+      verification: { status: string };
+      auditEvents: Array<{ action: string }>;
+    };
+  };
+  expect(recoveredWorkspace.workspace.verification.status).toBe("verified");
+  expect(recoveredWorkspace.workspace.auditEvents.some(
+    (event) => event.action === "source.ingestion_retried",
   )).toBe(true);
 
   const pageResponse = await request.get("/api/cases?limit=2");

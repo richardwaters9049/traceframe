@@ -1,9 +1,12 @@
+from unittest.mock import MagicMock
+
 import pytest
 
 import traceframe_worker.ingestion as ingestion
 from traceframe_worker.ingestion import (
     MAX_USER_AGENT_LENGTH,
     MAX_USER_AGENT_OBSERVATIONS,
+    IngestionJob,
     derive_observations,
     normalise_source,
 )
@@ -106,3 +109,39 @@ def test_derive_observations_bounds_distinct_user_agents_per_source() -> None:
     assert ("user_agent", "TraceframeSynthetic/0", 2) in user_agents
     excluded = f"TraceframeSynthetic/{MAX_USER_AGENT_OBSERVATIONS}"
     assert all(value != excluded for _, value, _ in user_agents)
+
+
+def test_process_job_records_failure_for_terminal_recovery(monkeypatch) -> None:
+    job = IngestionJob(
+        id="11111111-1111-4111-8111-111111111111",
+        source_id="22222222-2222-4222-8222-222222222222",
+        object_key="cases/case-id/sources/source-id",
+        media_type="text/plain",
+        size_bytes=32,
+        sha256="a" * 64,
+        attempts=3,
+        max_attempts=3,
+    )
+    error = ValueError("synthetic integrity failure")
+    client = MagicMock()
+    complete = MagicMock()
+    fail = MagicMock()
+    monkeypatch.setattr(ingestion, "claim_ingestion_job", MagicMock(return_value=job))
+    monkeypatch.setattr(ingestion, "read_source", MagicMock(side_effect=error))
+    monkeypatch.setattr(ingestion, "complete_job", complete)
+    monkeypatch.setattr(ingestion, "fail_job", fail)
+
+    result = ingestion.process_one_job(
+        "postgresql://traceframe:secret@db/traceframe",
+        client,
+        "case-source-material",
+        "worker-one",
+    )
+
+    assert result == job
+    complete.assert_not_called()
+    fail.assert_called_once_with(
+        "postgresql://traceframe:secret@db/traceframe",
+        job,
+        error,
+    )

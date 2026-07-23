@@ -19,6 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       capabilities: {
         canManageCase: can(user, "cases:update"),
         canDisposeSources: can(user, "sources:dispose"),
+        canRetrySources: can(user, "sources:retry"),
         canCreateFindings: can(user, "findings:create"),
         canReviewFindings: can(user, "findings:review"),
       },

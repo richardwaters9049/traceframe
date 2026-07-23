@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
+import { executeIntegrationSql } from "./integration-sql";
+
 async function signIn(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.getByRole("textbox", { name: "Password", exact: true }).fill("Traceframe!2026");
@@ -9,7 +11,95 @@ async function signIn(page: import("@playwright/test").Page) {
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 }
 
+async function prepareTerminalFailure(
+  page: import("@playwright/test").Page,
+  projectName: string,
+) {
+  const origin = new URL(page.url()).origin;
+  const title = `Synthetic retry ${projectName} ${Date.now().toString(36)}`;
+  const caseResponse = await page.request.post("/api/cases", {
+    headers: { Origin: origin },
+    data: {
+      title,
+      summary: "Synthetic terminal ingestion recovery verification.",
+      priority: "standard",
+    },
+  });
+  expect(caseResponse.status(), await caseResponse.text()).toBe(201);
+  const createdCase = await caseResponse.json() as { case: { id: string } };
+  const uploadResponse = await page.request.post(
+    `/api/cases/${createdCase.case.id}/sources`,
+    {
+      headers: { Origin: origin },
+      multipart: {
+        file: {
+          name: "synthetic-terminal-failure.txt",
+          mimeType: "text/plain",
+          buffer: Buffer.from(
+            "Synthetic terminal failure fixture only.\nUser-Agent: TraceframeRecoveryUI/1.0",
+          ),
+        },
+      },
+    },
+  );
+  expect(uploadResponse.status(), await uploadResponse.text()).toBe(202);
+  const source = await uploadResponse.json() as { sourceId: string };
+  let observationId: string | undefined;
+  await expect.poll(async () => {
+    const sourcesResponse = await page.request.get(
+      `/api/cases/${createdCase.case.id}/sources`,
+    );
+    const body = await sourcesResponse.json() as {
+      sources: Array<{
+        id: string;
+        status: string;
+        observations: Array<{ id: string; kind: string }>;
+      }>;
+    };
+    const uploadedSource = body.sources.find((item) => item.id === source.sourceId);
+    observationId = uploadedSource?.observations.find(
+      (observation) => observation.kind === "user_agent",
+    )?.id;
+    return uploadedSource?.status;
+  }, { timeout: 20_000 }).toBe("ready");
+  expect(observationId).toBeTruthy();
+  const findingResponse = await page.request.post(
+    `/api/cases/${createdCase.case.id}/findings`,
+    {
+      headers: { Origin: origin },
+      data: {
+        observationId,
+        note: "Synthetic browser fixture prepared for reviewed bundle verification.",
+      },
+    },
+  );
+  expect(findingResponse.status(), await findingResponse.text()).toBe(201);
+  const finding = await findingResponse.json() as { findingId: string };
+  const reviewResponse = await page.request.patch(
+    `/api/cases/${createdCase.case.id}/findings/${finding.findingId}`,
+    {
+      headers: { Origin: origin },
+      data: {
+        status: "confirmed",
+        rationale: "Confirmed as a synthetic recovery verification fixture.",
+      },
+    },
+  );
+  expect(reviewResponse.status(), await reviewResponse.text()).toBe(200);
+  await executeIntegrationSql(`
+    UPDATE ingestion_jobs
+    SET status = 'failed', attempts = max_attempts,
+      last_error = 'ValueError: source processing failed', updated_at = now()
+    WHERE source_id = '${source.sourceId}'::uuid;
+    UPDATE source_material
+    SET status = 'failed', failure_reason = 'ValueError: source processing failed'
+    WHERE id = '${source.sourceId}'::uuid;
+  `);
+  return title;
+}
+
 test("login, navigation, dialog focus, case selection, and logout are accessible", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   await signIn(page);
   await page.waitForTimeout(800);
 
@@ -88,17 +178,34 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   }
 
-  let reviewedCaseRow = page.getByTestId("case-row").filter({
-    hasText: /Concurrent synthetic .+-0/,
+  const retryCaseTitle = await prepareTerminalFailure(page, testInfo.project.name);
+  await page.reload();
+  const retryCaseRow = page.getByTestId("case-row").filter({
+    hasText: retryCaseTitle,
   }).first();
-  if (await reviewedCaseRow.count() === 0) {
-    await page.getByRole("button", { name: "Go to next page", exact: true }).click();
-    reviewedCaseRow = page.getByTestId("case-row").filter({
-      hasText: /Concurrent synthetic .+-0/,
-    }).first();
-  }
-  await expect(reviewedCaseRow).toBeVisible();
-  await reviewedCaseRow.click();
+  await expect(retryCaseRow).toBeVisible();
+  await retryCaseRow.click();
+  await page.getByRole("tab", { name: /^sources(?: · \d+)?$/ }).click();
+  const retryIngestionButton = page.getByRole("button", {
+    name: "Retry ingestion for synthetic-terminal-failure.txt",
+    exact: true,
+  });
+  await expect(retryIngestionButton).toBeVisible();
+  await retryIngestionButton.click();
+  const retryDialog = page.getByRole("dialog", { name: "Retry source ingestion?", exact: true });
+  await expect(retryDialog).toBeVisible();
+  const retryCancelButton = retryDialog.getByRole("button", { name: "Cancel", exact: true });
+  await expect(retryCancelButton).toBeFocused();
+  const retryDialogResults = await new AxeBuilder({ page })
+    .include('[role="dialog"]')
+    .disableRules(["color-contrast"])
+    .analyze();
+  expect(retryDialogResults.violations.filter(
+    (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
+  )).toEqual([]);
+  await retryCancelButton.click();
+  await expect(retryDialog).toBeHidden();
+  await expect(retryIngestionButton).toBeFocused();
   await page.getByRole("tab", { name: /^findings(?: · \d+)?$/ }).click();
   const bundleButton = page.getByRole("button", { name: "Bundle", exact: true });
   await expect(bundleButton).toBeEnabled();

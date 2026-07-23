@@ -14,6 +14,7 @@ import type { CaseWorkspaceRecord } from "@/components/cases/workspace-content";
 import { CasePrintSummary } from "@/components/cases/case-print-summary";
 import { CaseRelationships } from "@/components/cases/case-relationships";
 import { SourceDisposalDialog } from "@/components/cases/source-disposal-dialog";
+import { SourceIngestionRetryDialog } from "@/components/cases/source-ingestion-retry-dialog";
 import { useWorkspaceUI } from "@/components/cases/workspace-ui-provider";
 import type { CaseRecord } from "@/lib/cases/contracts";
 import type { FindingRecord } from "@/lib/findings/contracts";
@@ -36,8 +37,21 @@ function readableBytes(value: number) {
   return value < 1024 ? `${value} B` : `${(value / 1024).toFixed(value < 10240 ? 1 : 0)} KiB`;
 }
 
+function canRetryIngestion(source: SourceRecord, isClosed: boolean, permitted: boolean) {
+  return permitted && !isClosed && source.status === "failed" && source.objectStatus === "retained";
+}
+
+function canDisposeOriginal(source: SourceRecord, isClosed: boolean, permitted: boolean) {
+  return permitted
+    && !isClosed
+    && (source.objectStatus === "retained" || source.objectStatus === "disposal_failed")
+    && source.status !== "queued"
+    && source.status !== "processing";
+}
+
 function auditLabel(action: string) {
   if (action === "source.uploaded") return "Source uploaded";
+  if (action === "source.ingestion_retried") return "Source ingestion retried";
   if (action === "source.disposal_requested") return "Source disposal requested";
   if (action === "finding.proposed") return "Finding proposed";
   if (action === "finding.confirmed") return "Finding confirmed";
@@ -77,6 +91,11 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const [disposalError, setDisposalError] = useState<string | null>(null);
   const [disposalOpener, setDisposalOpener] = useState<HTMLElement | null>(null);
   const [disposalMessage, setDisposalMessage] = useState<string | null>(null);
+  const [retrySource, setRetrySource] = useState<SourceRecord | null>(null);
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryOpener, setRetryOpener] = useState<HTMLElement | null>(null);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const isClosed = record.status === "closed";
   const createdAt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt));
@@ -213,6 +232,37 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
     setDisposalBusy(false);
   }
 
+  function openRetryDialog(source: SourceRecord, opener: HTMLElement) {
+    setRetrySource(source);
+    setRetryOpener(opener);
+    setRetryError(null);
+  }
+
+  function closeRetryDialog() {
+    if (retryBusy) return;
+    setRetrySource(null);
+    setRetryError(null);
+  }
+
+  async function confirmIngestionRetry() {
+    if (!retrySource || retryBusy) return;
+    setRetryBusy(true);
+    setRetryError(null);
+    setRetryMessage(null);
+    const result = await apiRequest<{ sourceId: string; status: "queued" }>(
+      `/api/cases/${encodeURIComponent(record.id)}/sources/${encodeURIComponent(retrySource.id)}/retry`,
+      { method: "POST" },
+    );
+    if (result.ok) {
+      await refreshWorkspace();
+      setRetryMessage("Source ingestion requeued from the retained original.");
+      setRetrySource(null);
+    } else {
+      setRetryError(result.error);
+    }
+    setRetryBusy(false);
+  }
+
   useEffect(() => {
     if (!sourceActivity) return;
     const controller = new AbortController();
@@ -329,6 +379,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
               </form> : <p className="ui-meta mt-6 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-[#AAB3C1]">Source upload is unavailable while this case is closed.</p>}
               {message ? <p role={message.tone === "error" ? "alert" : "status"} className={`ui-meta mt-3 flex items-center gap-2 ${message.tone === "error" ? "text-[#FF9BA7]" : "text-[#76E2D5]"}`}>{message.tone === "error" ? <AlertTriangle className="size-4" /> : <Check className="size-4" />}{message.text}</p> : null}
               {disposalMessage ? <p role="status" className="ui-meta mt-3 flex items-center gap-2 text-[#76E2D5]"><ShieldCheck className="size-4" />{disposalMessage}</p> : null}
+              {retryMessage ? <p role="status" className="ui-meta mt-3 flex items-center gap-2 text-[#9AA7FF]"><RotateCcw className="size-4" />{retryMessage}</p> : null}
 
               <div className="mt-5 space-y-3">
                 {!sources.length ? <div className="grid min-h-48 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.012] p-8 text-center"><div><Eye className="mx-auto size-6 text-[#7484F4]" /><p className="ui-section-title mt-3">No source material yet</p><p className="ui-meta mt-2 text-[#AAB3C1]">The original stays in object storage; only provenance and derived analysis appear here.</p></div></div> : null}
@@ -345,9 +396,12 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
                   </div>
                   <p className="ui-meta mt-3 truncate font-mono text-[#8993A4]" title={source.sha256}>SHA-256 {source.sha256}</p>
                   {source.status === "ready" ? <><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Characters</p><p className="ui-section-title mt-1">{source.characterCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Lines</p><p className="ui-section-title mt-1">{source.lineCount}</p></div><div className="rounded-xl bg-white/[0.025] p-3"><p className="ui-eyebrow text-[#7F8A9B]">Words</p><p className="ui-section-title mt-1">{source.wordCount}</p></div></div>{source.observations.length ? <div className="mt-4 flex flex-wrap gap-2">{source.observations.map((observation) => <span key={observation.id} className="ui-meta max-w-full truncate rounded-lg bg-[#58D6C7]/[0.055] px-2.5 py-1.5 text-[#8FDCD3] ring-1 ring-inset ring-[#58D6C7]/10">{observationKindLabel(observation.kind)} · {observation.value}{observation.occurrences > 1 ? ` ×${observation.occurrences}` : ""}</span>)}</div> : <p className="ui-meta mt-4 text-[#9FA9B8]">No supported indicators were derived.</p>}</> : null}
-                  {source.failureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.failureReason}</p> : null}
+                  {source.failureReason ? <div role="alert" className="mt-4 rounded-xl border border-[#FF7D8D]/15 bg-[#FF7D8D]/[0.045] p-3.5"><p className="ui-label text-[#FFABB5]">Processing stopped after {source.ingestion.attempts} of {source.ingestion.maxAttempts} attempts</p><p className="ui-meta mt-1.5 text-[#C9A1A7]">{source.failureReason}</p></div> : null}
                   {source.disposalFailureReason ? <p role="alert" className="ui-meta mt-3 text-[#FF9BA7]">{source.disposalFailureReason}</p> : null}
-                  {!isClosed && workspace.capabilities.canDisposeSources && (source.objectStatus === "retained" || source.objectStatus === "disposal_failed") && source.status !== "queued" && source.status !== "processing" ? <div className="mt-4 flex justify-end border-t border-white/[0.06] pt-4"><button type="button" aria-label={`${source.objectStatus === "disposal_failed" ? "Retry disposal for" : "Dispose original"} ${source.originalFilename}`} onClick={(event) => openDisposalDialog(source, event.currentTarget)} className="ui-meta inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#FF7D8D]/15 bg-[#FF7D8D]/[0.045] px-3.5 py-2.5 text-[#FFABB5] transition hover:border-[#FF7D8D]/30 hover:bg-[#FF7D8D]/[0.08]"><ShieldOff className="size-4" />{source.objectStatus === "disposal_failed" ? "Retry disposal" : "Dispose original"}</button></div> : null}
+                  {canRetryIngestion(source, isClosed, workspace.capabilities.canRetrySources) || canDisposeOriginal(source, isClosed, workspace.capabilities.canDisposeSources) ? <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-white/[0.06] pt-4">
+                    {canRetryIngestion(source, isClosed, workspace.capabilities.canRetrySources) ? <button type="button" aria-label={`Retry ingestion for ${source.originalFilename}`} onClick={(event) => openRetryDialog(source, event.currentTarget)} className="ui-meta inline-flex cursor-pointer items-center gap-2 rounded-xl border border-primary/20 bg-primary/[0.07] px-3.5 py-2.5 text-[#B6C0FF] transition hover:border-primary/40 hover:bg-primary/[0.12] hover:text-white"><RotateCcw className="size-4" />Retry ingestion</button> : null}
+                    {canDisposeOriginal(source, isClosed, workspace.capabilities.canDisposeSources) ? <button type="button" aria-label={`${source.objectStatus === "disposal_failed" ? "Retry disposal for" : "Dispose original"} ${source.originalFilename}`} onClick={(event) => openDisposalDialog(source, event.currentTarget)} className="ui-meta inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#FF7D8D]/15 bg-[#FF7D8D]/[0.045] px-3.5 py-2.5 text-[#FFABB5] transition hover:border-[#FF7D8D]/30 hover:bg-[#FF7D8D]/[0.08]"><ShieldOff className="size-4" />{source.objectStatus === "disposal_failed" ? "Retry disposal" : "Dispose original"}</button> : null}
+                  </div> : null}
                 </article>)}
               </div>
             </motion.div>
@@ -422,6 +476,14 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
         opener={disposalOpener}
         onClose={closeDisposalDialog}
         onConfirm={() => void confirmSourceDisposal()}
+      />
+      <SourceIngestionRetryDialog
+        source={retrySource}
+        busy={retryBusy}
+        error={retryError}
+        opener={retryOpener}
+        onClose={closeRetryDialog}
+        onConfirm={() => void confirmIngestionRetry()}
       />
     </section>
   );
