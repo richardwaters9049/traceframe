@@ -52,3 +52,5 @@ Added verified reviewed-finding ZIP bundles with hashed provenance manifests for
 controlled hand-off without source content.
 Added bounded user-agent observations across ingestion, findings, exports, and
 cross-source relationships.
+Added audited recovery for terminal ingestion failures, including bounded
+attempt details, retained-original checks, and a guided requeue flow.

@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 
+import type postgres from "postgres";
+
 import { createAuditHash } from "@/lib/audit/hash";
 import { getDatabaseClient } from "@/lib/db/client";
 import type { ObservationKind, SourceRecord, SourceUploadInput } from "@/lib/sources/contracts";
@@ -13,6 +15,8 @@ type SourceRow = {
   object_status: SourceRecord["objectStatus"]; disposal_requested_at: Date | null; disposed_at: Date | null;
   disposal_failure_reason: string | null;
   character_count: number | null; line_count: number | null; word_count: number | null;
+  job_status: SourceRecord["ingestion"]["status"]; attempts: number; max_attempts: number;
+  job_updated_at: Date;
 };
 type ObservationRow = { id: string; source_id: string; kind: ObservationKind; value: string; occurrences: number };
 
@@ -36,6 +40,12 @@ export function serialiseSources(rows: SourceRow[], observations: ObservationRow
     characterCount: row.character_count,
     lineCount: row.line_count,
     wordCount: row.word_count,
+    ingestion: {
+      status: row.job_status,
+      attempts: row.attempts,
+      maxAttempts: row.max_attempts,
+      updatedAt: row.job_updated_at.toISOString(),
+    },
     observations: (bySource.get(row.id) ?? []).map(({ id, kind, value, occurrences }) => ({ id, kind, value, occurrences })),
   }));
 }
@@ -46,8 +56,11 @@ export async function listCaseSources(caseId: string) {
     SELECT s.id, s.original_filename, s.media_type, s.size_bytes, s.sha256, s.status,
       s.failure_reason, s.object_status, s.disposal_requested_at, s.disposed_at,
       s.disposal_failure_reason, s.created_at, s.processed_at,
-      n.character_count, n.line_count, n.word_count
-    FROM source_material s LEFT JOIN normalised_sources n ON n.source_id = s.id
+      n.character_count, n.line_count, n.word_count, j.status AS job_status,
+      j.attempts, j.max_attempts, j.updated_at AS job_updated_at
+    FROM source_material s
+    JOIN ingestion_jobs j ON j.source_id = s.id
+    LEFT JOIN normalised_sources n ON n.source_id = s.id
     WHERE s.case_id = ${caseId} ORDER BY s.created_at DESC, s.id DESC`;
   if (!rows.length) return [];
   const observations = await sql<ObservationRow[]>`
@@ -189,5 +202,115 @@ export async function requestSourceDisposal(
       SET last_sequence = ${ledgerSequence}, last_event_hash = ${eventHash}, updated_at = now()
       WHERE ledger = 'global'`;
     return { sourceId, objectStatus: "disposal_pending" as const };
+  });
+}
+
+async function appendSourceRetryAuditEvent(
+  transaction: postgres.TransactionSql,
+  input: {
+    actorEmail: string;
+    caseId: string;
+    sourceId: string;
+    sha256: string;
+    previousAttempts: number;
+  },
+) {
+  const [head] = await transaction<{ last_sequence: string; last_event_hash: string | null }[]>`
+    SELECT last_sequence, last_event_hash
+    FROM audit_chain_heads
+    WHERE ledger = 'global'
+    FOR UPDATE`;
+  if (!head) throw new Error("Global audit chain head is missing");
+
+  const occurredAt = new Date().toISOString();
+  const metadata = {
+    sourceId: input.sourceId,
+    sha256: input.sha256,
+    previousAttempts: input.previousAttempts,
+  };
+  const ledgerSequence = Number(head.last_sequence) + 1;
+  const eventHash = createAuditHash({
+    actorId: input.actorEmail,
+    action: "source.ingestion_retried",
+    objectType: "case",
+    objectId: input.caseId,
+    reason: "Terminal source ingestion requeued",
+    metadata,
+    previousHash: head.last_event_hash,
+    occurredAt,
+  });
+
+  await transaction`
+    INSERT INTO audit_events
+      (ledger_sequence, actor_id, action, object_type, object_id, reason, metadata,
+        previous_hash, event_hash, created_at)
+    VALUES (${ledgerSequence}, ${input.actorEmail}, 'source.ingestion_retried', 'case',
+      ${input.caseId}, 'Terminal source ingestion requeued', ${transaction.json(metadata)},
+      ${head.last_event_hash}, ${eventHash}, ${occurredAt})`;
+  await transaction`
+    UPDATE audit_chain_heads
+    SET last_sequence = ${ledgerSequence}, last_event_hash = ${eventHash}, updated_at = now()
+    WHERE ledger = 'global'`;
+}
+
+export async function retrySourceIngestion(
+  caseId: string,
+  sourceId: string,
+  actor: { email: string },
+) {
+  const sql = getDatabaseClient();
+  return sql.begin(async (transaction) => {
+    const [lockedCase] = await transaction<{ status: string }[]>`
+      SELECT status FROM cases WHERE id = ${caseId} FOR UPDATE`;
+    if (!lockedCase) throw new Error("CASE_NOT_FOUND");
+    if (lockedCase.status === "closed") throw new Error("CASE_CLOSED");
+
+    const [source] = await transaction<{
+      id: string;
+      status: SourceRecord["status"];
+      object_status: SourceRecord["objectStatus"];
+      sha256: string;
+    }[]>`
+      SELECT id, status, object_status, sha256
+      FROM source_material
+      WHERE id = ${sourceId} AND case_id = ${caseId}
+      FOR UPDATE`;
+    if (!source) throw new Error("SOURCE_NOT_FOUND");
+    if (source.status !== "failed") throw new Error("SOURCE_NOT_FAILED");
+    if (source.object_status !== "retained") throw new Error("SOURCE_ORIGINAL_UNAVAILABLE");
+
+    const [job] = await transaction<{
+      id: string;
+      status: SourceRecord["ingestion"]["status"];
+      attempts: number;
+      max_attempts: number;
+    }[]>`
+      SELECT id, status, attempts, max_attempts
+      FROM ingestion_jobs
+      WHERE source_id = ${sourceId}
+      FOR UPDATE`;
+    if (!job) throw new Error("INGESTION_JOB_NOT_FOUND");
+    if (job.status !== "failed" || job.attempts < job.max_attempts) {
+      throw new Error("SOURCE_NOT_FAILED");
+    }
+
+    await transaction`
+      UPDATE ingestion_jobs
+      SET status = 'pending', attempts = 0, last_error = NULL, available_at = now(),
+        locked_at = NULL, locked_by = NULL, completed_at = NULL, updated_at = now()
+      WHERE id = ${job.id}`;
+    await transaction`
+      UPDATE source_material
+      SET status = 'queued', failure_reason = NULL, processed_at = NULL
+      WHERE id = ${sourceId}`;
+
+    await appendSourceRetryAuditEvent(transaction, {
+      actorEmail: actor.email,
+      caseId,
+      sourceId,
+      sha256: source.sha256,
+      previousAttempts: job.attempts,
+    });
+    return { sourceId, status: "queued" as const };
   });
 }

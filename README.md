@@ -28,6 +28,8 @@ Traceframe currently provides a complete first vertical slice:
 - Validated synthetic TXT, LOG, CSV, and JSON source uploads stored in MinIO.
 - Durable PostgreSQL ingestion jobs with safe worker claiming, retries, and
   stale-lease recovery.
+- Audited recovery for terminal ingestion failures, with bounded attempt
+  visibility and safe requeueing from the retained original.
 - Deterministic UTF-8 normalisation with source integrity verification and
   derived email, URL, IPv4, domain, embedded SHA-256, and bounded user-agent
   observations.
@@ -75,16 +77,18 @@ After signing in, the user stays within one protected workspace:
 7. Open **Sources**, upload a small synthetic text-like file, and follow its
    queued, processing, and ready states without leaving the workspace.
 8. Review its SHA-256 provenance, normalisation counts, and derived indicators.
-9. Promote a derived observation into a proposed finding, record an analyst
+9. If ingestion reaches a terminal failure, inspect its sanitised attempt state
+   and explicitly requeue the retained original.
+10. Promote a derived observation into a proposed finding, record an analyst
    note, then confirm or dismiss it with a rationale.
-10. Download reviewed decisions as CSV or JSON, create a verified ZIP hand-off
+11. Download reviewed decisions as CSV or JSON, create a verified ZIP hand-off
     bundle with source provenance, or print a concise case summary.
-11. Open Relationships to inspect indicators repeated across ready sources.
-12. Close a resolved case after processing and finding reviews are complete;
+12. Open Relationships to inspect indicators repeated across ready sources.
+13. Close a resolved case after processing and finding reviews are complete;
     reopen it when further investigation is required.
-13. When retention no longer requires an original, request its audited disposal
+14. When retention no longer requires an original, request its audited disposal
     while keeping provenance and derived analysis available.
-14. Open the architecture view from the same component-driven workspace.
+15. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.
@@ -259,6 +263,7 @@ curl -fsS http://127.0.0.1:3000/api/health
 | `GET` | `/api/cases/:id/sources` | Return source status, provenance, and derived observations |
 | `POST` | `/api/cases/:id/sources` | Validate, preserve, audit, and queue a synthetic source |
 | `DELETE` | `/api/cases/:id/sources/:sourceId` | Audit and queue permanent disposal of an original object |
+| `POST` | `/api/cases/:id/sources/:sourceId/retry` | Audit and requeue a terminal ingestion failure |
 | `GET` | `/api/cases/:id/correlations` | Return a bounded view of indicators repeated across ready sources |
 | `GET` | `/api/cases/:id/findings` | Return findings with case-level lifecycle and indicator summaries |
 | `POST` | `/api/cases/:id/findings` | Promote one derived observation into a proposed finding |
@@ -291,6 +296,10 @@ curl -fsS http://127.0.0.1:3000/api/health
   job, source retention state, and `source.disposal_requested` event commit
   atomically; the worker retries idempotent object deletion while PostgreSQL
   retains provenance and derived analysis.
+- Ingestion recovery accepts only a terminal failed job in an open case whose
+  original is still retained. It resets the existing job and source state while
+  appending `source.ingestion_retried` atomically; active, repeated, closed-case,
+  and missing-original attempts fail closed.
 - Finding proposals and terminal review decisions extend the global ledger in
   the same transaction as their state change. Actor identity comes from the
   server session, and analyst notes are not copied into audit metadata or logs.
@@ -396,5 +405,5 @@ automatic down-migrations are intentionally not provided.
 ## Next milestones
 
 - Add larger-file streaming and carefully bounded binary-format parsers.
-- Introduce production operations for dead-letter jobs, metrics, alerting, and
+- Introduce production operations dashboards, metrics, alerting, and
   storage/database backup testing.
