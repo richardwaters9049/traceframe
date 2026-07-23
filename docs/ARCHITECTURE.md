@@ -138,6 +138,20 @@ case audit histories. Selecting a case keeps navigation state inside
 `GET /api/cases/:id`. Additional register pages use the same cursor through
 `GET /api/cases`. Only `/` and `/dashboard` are user-facing page routes.
 
+## Case lifecycle
+
+Analysts and admins can transition a case between `open` and `closed` through
+the same-origin `PATCH /api/cases/:id` boundary. The transaction locks the case
+row, rejects duplicate transitions, blocks closure while a source is queued or
+processing or a finding remains proposed, updates the case, and appends
+`case.closed` or `case.reopened` to the global audit ledger atomically.
+
+Source upload, finding proposal, and finding review transactions also lock the
+case row before writing. This makes a closed case read-only at the database
+boundary and prevents a concurrent request from slipping through while closure
+is being committed. Reads, reviewed-finding exports, relationships, and the
+verified audit view remain available for preserved closed cases.
+
 ## Audit integrity
 
 The ledger is global. Each case workspace is a filtered view of that ledger and
@@ -167,11 +181,11 @@ State-changing handlers validate `Origin` against the effective request host.
 Responses include request IDs and server logs use structured event records
 without credentials or session tokens.
 
-Role capabilities are explicit and fail closed: `analyst` and `admin` may read
-and create cases, upload sources, and manage findings; `reviewer` may read only,
-and unknown roles receive no case access. This is workspace-level authorisation;
-case ownership or membership must be designed before cases are shared across
-separate workspaces.
+Role capabilities are explicit and fail closed: `analyst` and `admin` may read,
+create, close, and reopen cases, upload sources, and manage findings; `reviewer`
+may read only, and unknown roles receive no case access. This is workspace-level
+authorisation; case ownership or membership must be designed before cases are
+shared across separate workspaces.
 
 ## Schema lifecycle
 

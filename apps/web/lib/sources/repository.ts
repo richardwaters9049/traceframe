@@ -57,12 +57,19 @@ export async function createSourceUpload(caseId: string, input: SourceUploadInpu
 
   const [existing] = await sql<{ id: string }[]>`SELECT id FROM source_material WHERE case_id = ${caseId} AND sha256 = ${sha256} LIMIT 1`;
   if (existing) throw new Error("DUPLICATE_SOURCE");
-  const [record] = await sql<{ id: string }[]>`SELECT id FROM cases WHERE id = ${caseId} LIMIT 1`;
+  const [record] = await sql<{ id: string; status: string }[]>`
+    SELECT id, status FROM cases WHERE id = ${caseId} LIMIT 1`;
   if (!record) throw new Error("CASE_NOT_FOUND");
+  if (record.status === "closed") throw new Error("CASE_CLOSED");
 
   await putSourceObject(objectKey, input.bytes, input.mediaType);
   try {
     await sql.begin(async (transaction) => {
+      const [lockedCase] = await transaction<{ status: string }[]>`
+        SELECT status FROM cases WHERE id = ${caseId} FOR UPDATE`;
+      if (!lockedCase) throw new Error("CASE_NOT_FOUND");
+      if (lockedCase.status === "closed") throw new Error("CASE_CLOSED");
+
       await transaction`
         INSERT INTO source_material
           (id, case_id, object_key, original_filename, media_type, size_bytes, sha256, uploaded_by)

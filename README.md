@@ -22,6 +22,8 @@ Traceframe currently provides a complete first vertical slice:
   views without putting workspace state into URLs.
 - An in-context drawer for creating cases with validated titles, summaries, and
   priorities.
+- Audited open and closed case states, with safe closure preconditions and
+  read-only preservation until a case is explicitly reopened.
 - A cursor-paginated case register and on-demand individual case workspace.
 - Validated synthetic TXT, LOG, CSV, and JSON source uploads stored in MinIO.
 - Durable PostgreSQL ingestion jobs with safe worker claiming, retries, and
@@ -75,7 +77,9 @@ After signing in, the user stays within one protected workspace:
 10. Download the reviewed decisions as CSV or JSON, or print a concise case
     summary without exposing pending proposals.
 11. Open Relationships to inspect indicators repeated across ready sources.
-12. Open the architecture view from the same component-driven workspace.
+12. Close a resolved case after processing and finding reviews are complete;
+    reopen it when further investigation is required.
+13. Open the architecture view from the same component-driven workspace.
 
 Only `/` and `/dashboard` are user-facing pages. Architecture, case creation,
 and individual cases are rendered as components inside the dashboard shell.

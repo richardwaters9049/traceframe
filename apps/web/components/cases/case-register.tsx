@@ -22,6 +22,11 @@ const priorityStyles: Record<string, string> = {
   critical: "bg-red-300/[0.08] text-red-200 ring-red-300/15",
 };
 
+const caseStatusStyles: Record<string, string> = {
+  open: "bg-[#58D6C7]/[0.08] text-[#7BE5D8] ring-[#58D6C7]/15",
+  closed: "bg-white/[0.05] text-[#AAB3C1] ring-white/[0.08]",
+};
+
 export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
   const { openCase } = useWorkspaceUI();
   const [pages, setPages] = useState<Record<number, CaseCursorPage>>({ 0: initialPage });
@@ -119,7 +124,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
 
   return (
     <motion.section
-      id="active-register"
+      id="case-register"
       initial={{ opacity: 0, scale: 0.99 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.45, delay: 0.18 }}
@@ -127,8 +132,8 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
     >
       <div className="flex min-w-0 items-end justify-between gap-4 border-b border-white/[0.06] px-5 py-3.5 sm:px-6">
         <div className="min-w-0">
-          <h2 className="ui-section-title">Active register</h2>
-          <p className="ui-meta truncate text-[#B6BECA]">Select a record to open its investigation workspace.</p>
+          <h2 className="ui-section-title">Case register</h2>
+          <p className="ui-meta truncate text-[#B6BECA]">Open and closed investigations remain available for review.</p>
         </div>
         {initialPage.totalCount ? (
           <p className="ui-label hidden shrink-0 text-[#8D97A8] sm:block">
@@ -176,6 +181,9 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                         <h3 className="truncate text-base font-medium leading-6 tracking-[0.025em] text-[#E9ECF2] sm:text-lg sm:leading-7">
                           {caseRecord.title}
                         </h3>
+                        <span className={`hidden shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-medium uppercase tracking-[0.08em] ring-1 ring-inset sm:inline-flex ${caseStatusStyles[caseRecord.status] ?? caseStatusStyles.open}`}>
+                          {caseRecord.status}
+                        </span>
                         <ArrowUpRight className="size-4 shrink-0 text-[#7A8496] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden="true" />
                       </div>
                       <p className="truncate text-[0.82rem] leading-5 tracking-[0.03em] text-[#ADB6C5] sm:text-sm sm:leading-6">
@@ -202,7 +210,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
               <PaginationContent className="gap-1">
                 <PaginationItem>
                   <PaginationLink
-                    href="#active-register"
+                    href="#case-register"
                     size="default"
                     aria-label="Go to first page"
                     title="First page"
@@ -220,7 +228,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                 </PaginationItem>
                 <PaginationItem>
                   <PaginationPrevious
-                    href="#active-register"
+                    href="#case-register"
                     text="Previous"
                     aria-disabled={!hasPreviousPage || isLoading}
                     tabIndex={!hasPreviousPage || isLoading ? -1 : undefined}
@@ -235,7 +243,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                 {hasPreviousPage ? (
                   <PaginationItem className="hidden lg:block">
                     <PaginationLink
-                      href="#active-register"
+                      href="#case-register"
                       aria-label={`Go to page ${pageIndex}`}
                       onClick={(event) => {
                         event.preventDefault();
@@ -250,7 +258,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
 
                 <PaginationItem>
                   <PaginationLink
-                    href="#active-register"
+                    href="#case-register"
                     isActive
                     aria-label={`Page ${pageIndex + 1}`}
                     onClick={(event) => event.preventDefault()}
@@ -263,7 +271,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                 {hasNextPage ? (
                   <PaginationItem className="hidden lg:block">
                     <PaginationLink
-                      href="#active-register"
+                      href="#case-register"
                       aria-label={`Go to page ${pageIndex + 2}`}
                       onClick={(event) => {
                         event.preventDefault();
@@ -278,7 +286,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
 
                 <PaginationItem>
                   <PaginationNext
-                    href="#active-register"
+                    href="#case-register"
                     text="Next"
                     aria-busy={isLoading}
                     aria-disabled={!hasNextPage || isLoading}
@@ -292,7 +300,7 @@ export function CaseRegister({ initialPage }: { initialPage: CaseCursorPage }) {
                 </PaginationItem>
                 <PaginationItem>
                   <PaginationLink
-                    href="#active-register"
+                    href="#case-register"
                     size="default"
                     aria-label="Go to last page"
                     title="Last page"

@@ -37,6 +37,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return jsonResponse({ findingId, status: "proposed" }, 201, requestId);
   } catch (error) {
     if (error instanceof SyntaxError) return jsonResponse({ error: "Invalid JSON body." }, 400, requestId);
+    if (error instanceof Error && error.message === "CASE_NOT_FOUND") return jsonResponse({ error: "Case not found." }, 404, requestId);
+    if (error instanceof Error && error.message === "CASE_CLOSED") {
+      return jsonResponse({ error: "Reopen the case before proposing new findings." }, 409, requestId);
+    }
     if (error instanceof Error && error.message === "OBSERVATION_NOT_FOUND") return jsonResponse({ error: "Observation not found." }, 404, requestId);
     if (error instanceof Error && error.message === "FINDING_EXISTS") return jsonResponse({ error: "That observation is already a finding." }, 409, requestId);
     requestLog("error", "findings.propose.error", requestId, { error: error instanceof Error ? error.name : "unknown" });

@@ -52,6 +52,22 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
   expect(caseRowCount).toBeLessThanOrEqual(5);
   if (caseRowCount > 0) {
     await caseRows.nth(0).click();
+    const lifecycleButton = page.getByRole("button", { name: /^(Close|Reopen) case$/ });
+    await expect(lifecycleButton).toBeVisible();
+    await lifecycleButton.click();
+    const lifecycleDialog = page.getByRole("dialog", { name: /^(Close|Reopen) this case\?$/ });
+    await expect(lifecycleDialog).toBeVisible();
+    await expect(lifecycleDialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    // WebKit's backdrop-filter compositing makes axe sample the dimmed page
+    // through the dialog; page-level contrast is checked before the modal.
+    const lifecycleResults = await new AxeBuilder({ page })
+      .include('[role="dialog"]')
+      .disableRules(["color-contrast"])
+      .analyze();
+    expect(lifecycleResults.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
+    await lifecycleDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(lifecycleDialog).toBeHidden();
+    await expect(lifecycleButton).toBeFocused();
     await page.getByRole("tab", { name: "analysis", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Analysis workspace" })).toBeVisible();
     await page.getByRole("tab", { name: /^sources(?: · \d+)?$/ }).click();

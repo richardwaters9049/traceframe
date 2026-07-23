@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const casePriorities = ["standard", "high", "critical"] as const;
+export const caseStatuses = ["open", "closed"] as const;
 export const CASE_REGISTER_PAGE_SIZE = 5;
 
 export const createCaseSchema = z.object({
@@ -17,14 +18,19 @@ export const createCaseSchema = z.object({
   priority: z.enum(casePriorities).default("standard"),
 });
 
+export const updateCaseStatusSchema = z.object({
+  status: z.enum(caseStatuses),
+});
+
 export type CreateCaseInput = z.infer<typeof createCaseSchema>;
+export type UpdateCaseStatusInput = z.infer<typeof updateCaseStatusSchema>;
 
 export type CaseRecord = {
   id: string;
   title: string;
   summary: string;
-  status: string;
-  priority: string;
+  status: (typeof caseStatuses)[number];
+  priority: (typeof casePriorities)[number];
   createdAt: string;
   updatedAt: string;
 };
@@ -47,5 +53,7 @@ export type CaseCursorPage = {
   previousCursor: string | null;
   nextCursor: string | null;
   totalCount: number;
+  openCount: number;
+  closedCount: number;
   urgentCount: number;
 };

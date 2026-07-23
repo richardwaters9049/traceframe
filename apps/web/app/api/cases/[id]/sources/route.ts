@@ -41,6 +41,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return jsonResponse({ sourceId, status: "queued" }, 202, requestId);
   } catch (error) {
     if (error instanceof Error && error.message === "CASE_NOT_FOUND") return jsonResponse({ error: "Case not found." }, 404, requestId);
+    if (error instanceof Error && error.message === "CASE_CLOSED") {
+      return jsonResponse({ error: "Reopen the case before uploading new source material." }, 409, requestId);
+    }
     if (error instanceof Error && error.message === "DUPLICATE_SOURCE") return jsonResponse({ error: "This source is already attached to the case." }, 409, requestId);
     if (error instanceof Error && error.message.startsWith("INVALID_")) {
       requestLog("warn", "sources.upload.rejected", requestId, { reason: error.message });

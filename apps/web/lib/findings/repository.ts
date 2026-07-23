@@ -119,6 +119,11 @@ export async function proposeFinding(
   const sql = getDatabaseClient();
   try {
     return await sql.begin(async (transaction) => {
+      const [record] = await transaction<{ status: string }[]>`
+        SELECT status FROM cases WHERE id = ${caseId} FOR UPDATE`;
+      if (!record) throw new Error("CASE_NOT_FOUND");
+      if (record.status === "closed") throw new Error("CASE_CLOSED");
+
       const [finding] = await transaction<{ id: string; observation_id: string }[]>`
         INSERT INTO findings (case_id, observation_id, analyst_note, created_by)
         SELECT ${caseId}, o.id, ${input.note}, ${actor.id}
@@ -153,6 +158,11 @@ export async function reviewFinding(
 ) {
   const sql = getDatabaseClient();
   await sql.begin(async (transaction) => {
+    const [record] = await transaction<{ status: string }[]>`
+      SELECT status FROM cases WHERE id = ${caseId} FOR UPDATE`;
+    if (!record) throw new Error("CASE_NOT_FOUND");
+    if (record.status === "closed") throw new Error("CASE_CLOSED");
+
     const [finding] = await transaction<{ id: string; observation_id: string; status: FindingRecord["status"] }[]>`
       SELECT id, observation_id, status FROM findings
       WHERE id = ${findingId} AND case_id = ${caseId}
