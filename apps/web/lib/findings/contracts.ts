@@ -1,9 +1,10 @@
 import { z } from "zod";
 
+import type { AuditVerification } from "@/lib/audit/verify";
 import type { ObservationKind } from "@/lib/sources/contracts";
 
 export const findingStatuses = ["proposed", "confirmed", "dismissed"] as const;
-export const findingExportFormats = ["csv", "json"] as const;
+export const findingExportFormats = ["csv", "json", "bundle"] as const;
 
 export const proposeFindingSchema = z.object({
   observationId: z.string().uuid(),
@@ -66,4 +67,43 @@ export type ReviewedFindingExport = {
   case: FindingExportCase;
   summary: { reviewed: number; confirmed: number; dismissed: number };
   findings: ReviewedFindingRecord[];
+};
+
+export type FindingProvenanceSource = {
+  id: string;
+  originalFilename: string;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  ingestionStatus: "queued" | "processing" | "ready" | "failed";
+  objectStatus: "retained" | "disposal_pending" | "disposed" | "disposal_failed";
+  createdAt: string;
+  processedAt: string | null;
+  disposalRequestedAt: string | null;
+  disposedAt: string | null;
+};
+
+export type ReviewedFindingBundleManifest = {
+  schemaVersion: 1;
+  generatedAt: string;
+  case: FindingExportCase;
+  summary: ReviewedFindingExport["summary"] & { referencedSources: number };
+  verification: Extract<AuditVerification, { status: "verified" }>;
+  policy: {
+    includesOriginalSourceMaterial: false;
+    includesNormalisedSourceContent: false;
+    findingStatuses: ["confirmed", "dismissed"];
+  };
+  contents: Array<{
+    path: string;
+    mediaType: string;
+    sizeBytes: number;
+    sha256: string;
+  }>;
+  sources: FindingProvenanceSource[];
+  findingProvenance: Array<{
+    findingId: string;
+    observationId: string;
+    sourceId: string;
+  }>;
 };

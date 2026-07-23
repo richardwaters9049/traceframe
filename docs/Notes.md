@@ -48,3 +48,5 @@ Added audited case closing and reopening, with safe completion checks and
 read-only enforcement for closed investigations.
 Added audited original-source disposal with durable retries and preserved
 provenance, observations, findings, and retention status.
+Added verified reviewed-finding ZIP bundles with hashed provenance manifests for
+controlled hand-off without source content.

@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Archive, ArrowLeft, Check, CircleCheckBig, CircleX, Clock3, Database,
-  Download, Eye, FileText, Fingerprint, LoaderCircle, LockKeyhole, Printer, RefreshCw,
+  Download, Eye, FileText, Fingerprint, LoaderCircle, LockKeyhole, PackageCheck, Printer, RefreshCw,
   RotateCcw, SearchCheck, ShieldCheck, ShieldOff, Upload, X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -65,6 +65,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
   const [findingAction, setFindingAction] = useState<string | null>(null);
   const [findingStatusFilter, setFindingStatusFilter] = useState<FindingStatusFilter>("all");
   const [findingKindFilter, setFindingKindFilter] = useState<FindingKindFilter>("all");
+  const [bundleDownloading, setBundleDownloading] = useState(false);
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [lifecycleTarget, setLifecycleTarget] = useState<CaseRecord["status"] | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
@@ -94,6 +95,41 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
 
   function downloadReviewedFindings(format: "csv" | "json") {
     window.location.assign(`/api/cases/${encodeURIComponent(record.id)}/findings/export?format=${format}`);
+  }
+
+  async function downloadReviewedBundle() {
+    if (!reviewedFindingCount || verification.status !== "verified" || bundleDownloading) return;
+    setBundleDownloading(true);
+    setMessage(null);
+    try {
+      const response = await fetch(
+        `/api/cases/${encodeURIComponent(record.id)}/findings/export?format=bundle`,
+        { headers: { Accept: "application/zip" } },
+      );
+      if (!response.ok) {
+        const body = response.headers.get("content-type")?.includes("application/json")
+          ? await response.json() as { error?: unknown }
+          : null;
+        setMessage({
+          tone: "error",
+          text: typeof body?.error === "string" ? body.error : "The hand-off bundle could not be created.",
+        });
+        return;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `traceframe-case-${record.id}-reviewed-findings.zip`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setMessage({ tone: "success", text: "Verified hand-off bundle prepared." });
+    } catch {
+      setMessage({ tone: "error", text: "Traceframe could not prepare the hand-off bundle." });
+    } finally {
+      setBundleDownloading(false);
+    }
   }
 
   async function refreshWorkspace() {
@@ -317,7 +353,7 @@ export function CaseWorkspace({ workspace }: { workspace: CaseWorkspaceRecord })
             </motion.div>
           ) : tab === "findings" ? (
             <motion.div key="findings" role="tabpanel" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="min-h-[28rem] min-w-0 rounded-[1.5rem] border border-white/[0.07] bg-navigation p-5 sm:p-7">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><SearchCheck className="size-5" /></span><div><h2 className="ui-section-title">Analyst findings</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Machine observed · human reviewed</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => downloadReviewedFindings("csv")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as CSV"><Download className="size-3.5" />CSV</button><button type="button" onClick={() => downloadReviewedFindings("json")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as JSON"><Download className="size-3.5" />JSON</button><button type="button" onClick={() => window.print()} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white" title="Print case summary"><Printer className="size-3.5" />Print</button></div></div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-[#91A0FF]"><SearchCheck className="size-5" /></span><div><h2 className="ui-section-title">Analyst findings</h2><p className="ui-eyebrow mt-1 text-[#8F99AA]">Machine observed · human reviewed</p></div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => downloadReviewedFindings("csv")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as CSV"><Download className="size-3.5" />CSV</button><button type="button" onClick={() => downloadReviewedFindings("json")} disabled={!reviewedFindingCount} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" title="Download reviewed findings as JSON"><Download className="size-3.5" />JSON</button><button type="button" onClick={() => void downloadReviewedBundle()} disabled={!reviewedFindingCount || verification.status !== "verified" || bundleDownloading} className="ui-meta inline-flex min-w-[5.4rem] cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#58D6C7]/15 bg-[#58D6C7]/[0.045] px-2.5 py-2 text-[#8FDCD3] transition hover:border-[#58D6C7]/30 hover:text-[#B5F2EB] disabled:cursor-not-allowed disabled:opacity-40" title={verification.status === "verified" ? "Download verified hand-off bundle" : "Verify the audit ledger before creating a bundle"}>{bundleDownloading ? <LoaderCircle className="size-3.5 animate-spin" /> : <PackageCheck className="size-3.5" />}{bundleDownloading ? "Preparing" : "Bundle"}</button><button type="button" onClick={() => window.print()} className="ui-meta inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.025] px-2.5 py-2 text-[#B8C0CB] transition hover:border-primary/30 hover:text-white" title="Print case summary"><Printer className="size-3.5" />Print</button></div></div>
 
               <div aria-label="Finding summary" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {([

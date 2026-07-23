@@ -4,7 +4,12 @@ import type postgres from "postgres";
 
 import { createAuditHash } from "@/lib/audit/hash";
 import { getDatabaseClient } from "@/lib/db/client";
-import type { FindingRecord, ProposeFindingInput, ReviewFindingInput } from "@/lib/findings/contracts";
+import type {
+  FindingProvenanceSource,
+  FindingRecord,
+  ProposeFindingInput,
+  ReviewFindingInput,
+} from "@/lib/findings/contracts";
 import { summariseFindings } from "@/lib/findings/summary";
 
 type FindingRow = {
@@ -16,6 +21,20 @@ type FindingRow = {
 
 type FindingExportCaseRow = {
   id: string; title: string; status: string; priority: string; created_at: Date;
+};
+
+type FindingProvenanceSourceRow = {
+  id: string;
+  original_filename: string;
+  media_type: string;
+  size_bytes: string;
+  sha256: string;
+  ingestion_status: FindingProvenanceSource["ingestionStatus"];
+  object_status: FindingProvenanceSource["objectStatus"];
+  created_at: Date;
+  processed_at: Date | null;
+  disposal_requested_at: Date | null;
+  disposed_at: Date | null;
 };
 
 function serialiseFinding(row: FindingRow): FindingRecord {
@@ -109,6 +128,34 @@ export async function getFindingExportData(caseId: string) {
     },
     findings: collection.findings,
   };
+}
+
+export async function getFindingExportProvenance(caseId: string): Promise<FindingProvenanceSource[]> {
+  const sql = getDatabaseClient();
+  const rows = await sql<FindingProvenanceSourceRow[]>`
+    SELECT DISTINCT s.id, s.original_filename, s.media_type, s.size_bytes, s.sha256,
+      s.status AS ingestion_status, s.object_status, s.created_at, s.processed_at,
+      s.disposal_requested_at, s.disposed_at
+    FROM source_material s
+    JOIN source_observations o ON o.source_id = s.id
+    JOIN findings f ON f.observation_id = o.id
+    WHERE s.case_id = ${caseId}
+      AND f.case_id = ${caseId}
+      AND f.status IN ('confirmed', 'dismissed')
+    ORDER BY s.created_at, s.id`;
+  return rows.map((row) => ({
+    id: row.id,
+    originalFilename: row.original_filename,
+    mediaType: row.media_type,
+    sizeBytes: Number(row.size_bytes),
+    sha256: row.sha256,
+    ingestionStatus: row.ingestion_status,
+    objectStatus: row.object_status,
+    createdAt: row.created_at.toISOString(),
+    processedAt: row.processed_at?.toISOString() ?? null,
+    disposalRequestedAt: row.disposal_requested_at?.toISOString() ?? null,
+    disposedAt: row.disposed_at?.toISOString() ?? null,
+  }));
 }
 
 export async function proposeFinding(
