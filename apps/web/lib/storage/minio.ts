@@ -66,3 +66,10 @@ export async function putSourceObject(objectKey: string, body: Uint8Array, media
 export async function deleteSourceObject(objectKey: string) {
   await getClient().send(new DeleteObjectCommand({ Bucket: bucketName(), Key: objectKey }));
 }
+
+export async function probeSourceStorage() {
+  await getClient().send(
+    new HeadBucketCommand({ Bucket: bucketName() }),
+    { abortSignal: AbortSignal.timeout(3_000) },
+  );
+}

@@ -1,0 +1,6 @@
+* text=auto
+
+# Shell entry points execute inside Linux containers, including after a Windows checkout.
+*.sh text eol=lf
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf

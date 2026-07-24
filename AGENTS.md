@@ -27,8 +27,8 @@ project and the role it supports.
 - Database: PostgreSQL with Drizzle ORM.
 - Object storage: MinIO for original source material.
 - Background processing: Python worker. It is not an HTTP server; it maintains
-  readiness/health state, removes expired sessions, processes source ingestion,
-  and reconciles original-source disposal.
+  container readiness and a database heartbeat, removes expired sessions,
+  processes source ingestion, and reconciles original-source disposal.
 - Local orchestration: Docker Compose. The web app, worker, database, and MinIO
   must continue to run as containers. The one-shot `migrate` service must finish
   successfully before seed, web, and worker startup.
@@ -121,6 +121,10 @@ Keep these current boundaries intact:
   `User-Agent:` header lines. Collapse horizontal whitespace, reject empty,
   control-character, and over-512-character values, and retain at most 50
   distinct user agents per source.
+- The Architecture workspace loads authenticated operational status on demand.
+  It reports coarse web, database, worker, and storage state plus aggregate job
+  totals; never expose internal addresses, worker IDs, source details, object
+  keys, credentials, or raw dependency errors.
 - Production infrastructure is defined in `render.yaml`. GitHub Actions is the
   release gate and Render deploys checked `main` commits. Provisioned runtime
   state, backups, alerts, and restore drills must not be claimed from the
@@ -131,10 +135,10 @@ Keep these current boundaries intact:
   limitations. Never silently replace the paid production topology with it.
 
 The ingestion slice is intentionally bounded. Large-file streaming, binary
-parsers, further observation types, automatic time-based retention, and
-production operations dashboards and alerting are planned product work. Do not describe
-those features as implemented, and do not treat their absence as unresolved
-debt from the 19/07/2026 review.
+parsers, further observation types, automatic time-based retention, hosted
+metrics and alerting, and backup restore drills are planned product work. Do
+not describe those features as implemented, and do not treat their absence as
+unresolved debt from the 19/07/2026 review.
 
 ## Security invariants
 

@@ -124,6 +124,40 @@ test("login, navigation, dialog focus, case selection, and logout are accessible
     await expect(page.getByRole("dialog", { name: "Workspace navigation" })).toBeHidden();
   }
 
+  if (testInfo.project.name.startsWith("mobile")) {
+    await page.getByRole("button", { name: "Open sidebar" }).click();
+    await page
+      .getByRole("dialog", { name: "Workspace navigation" })
+      .getByRole("button", { name: "Architecture", exact: true })
+      .click();
+  } else {
+    await page.getByRole("button", { name: "Architecture", exact: true }).click();
+  }
+  await expect(page.getByRole("heading", {
+    name: "Four focused services. One public boundary.",
+    exact: true,
+  })).toBeVisible();
+  await expect(page.getByLabel("Next.js status available", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("PostgreSQL status available", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Python status available", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Object storage status available", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Evidence pipeline status", { exact: true })).toBeVisible();
+  await page.waitForTimeout(400);
+  const architectureResults = await new AxeBuilder({ page }).analyze();
+  expect(architectureResults.violations.filter(
+    (violation) => ["serious", "critical"].includes(violation.impact ?? ""),
+  )).toEqual([]);
+  if (testInfo.project.name.startsWith("mobile")) {
+    await page.getByRole("button", { name: "Open sidebar" }).click();
+    await page
+      .getByRole("dialog", { name: "Workspace navigation" })
+      .getByRole("button", { name: "Dashboard", exact: true })
+      .click();
+  } else {
+    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+  }
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
   const opener = page.getByTestId("new-case-primary");
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Create a case" });

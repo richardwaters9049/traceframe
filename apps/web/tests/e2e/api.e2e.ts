@@ -56,6 +56,29 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
     kinds: ["domain", "email", "ipv4", "sha256", "url", "user_agent"],
   });
 
+  const operationsResponse = await request.get("/api/operations/status");
+  expect(operationsResponse.status()).toBe(200);
+  expect(operationsResponse.headers()["cache-control"]).toContain("no-store");
+  expect(operationsResponse.headers()["x-request-id"]).toBeTruthy();
+  const operations = await operationsResponse.json() as {
+    status: string;
+    services: Array<{ id: string; state: string; lastSeenAt: string | null }>;
+    pipeline: Record<string, number>;
+  };
+  expect(operations.status).toBe("operational");
+  expect(operations.services).toEqual(expect.arrayContaining([
+    expect.objectContaining({ id: "web", state: "available" }),
+    expect.objectContaining({ id: "database", state: "available" }),
+    expect.objectContaining({ id: "worker", state: "available" }),
+    expect.objectContaining({ id: "storage", state: "available" }),
+  ]));
+  expect(operations.pipeline).toEqual({
+    queued: expect.any(Number),
+    processing: expect.any(Number),
+    failed: expect.any(Number),
+    disposalPending: expect.any(Number),
+  });
+
   const sourcesResponse = await request.get(`/api/cases/${firstCreation.case.id}/sources`);
   const sourcesBody = await sourcesResponse.json() as {
     sources: Array<{ observations: Array<{ id: string; kind: string }> }>;
@@ -497,6 +520,7 @@ test("API boundaries, pagination, concurrency, revocation, and throttling", asyn
   expect((await request.get("/api/cases")).status()).toBe(401);
   expect((await request.get(`/api/cases/${firstCreation.case.id}/findings/export`)).status()).toBe(401);
   expect((await request.get(`/api/cases/${firstCreation.case.id}/correlations`)).status()).toBe(401);
+  expect((await request.get("/api/operations/status")).status()).toBe(401);
   expect((await request.delete(
     `/api/cases/${firstCreation.case.id}/sources/${secondSource.sourceId}`,
     { headers: { Origin: origin } },

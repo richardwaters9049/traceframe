@@ -17,3 +17,20 @@ def test_cleanup_expired_sessions_uses_database_time(monkeypatch) -> None:
     connection.execute.assert_called_once_with(
         "DELETE FROM sessions WHERE expires_at <= now() RETURNING id"
     )
+
+
+def test_record_worker_heartbeat_uses_database_time(monkeypatch) -> None:
+    connection = MagicMock()
+    context = MagicMock()
+    context.__enter__.return_value = connection
+    monkeypatch.setattr(worker.psycopg, "connect", MagicMock(return_value=context))
+
+    worker.record_worker_heartbeat(
+        "postgresql://traceframe:secret@db/traceframe",
+        "synthetic-worker",
+    )
+
+    query, parameters = connection.execute.call_args.args
+    assert "INSERT INTO service_heartbeats" in query
+    assert "SET last_seen_at = now()" in query
+    assert parameters == ("synthetic-worker",)

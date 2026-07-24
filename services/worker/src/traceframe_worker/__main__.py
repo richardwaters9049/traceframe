@@ -20,6 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("traceframe.worker")
 SESSION_CLEANUP_INTERVAL_SECONDS = 60 * 60
+HEARTBEAT_INTERVAL_SECONDS = 10
 
 
 def wait_for_database(database_url: str) -> None:
@@ -43,6 +44,21 @@ def cleanup_expired_sessions(database_url: str) -> int:
         return result.rowcount or 0
 
 
+def record_worker_heartbeat(database_url: str, worker_id: str) -> None:
+    """Upsert a database-timestamped worker heartbeat."""
+
+    with psycopg.connect(database_url, connect_timeout=5) as connection:
+        connection.execute(
+            """
+            INSERT INTO service_heartbeats (service_name, instance_id)
+            VALUES ('worker', %s)
+            ON CONFLICT (service_name, instance_id) DO UPDATE
+            SET last_seen_at = now()
+            """,
+            (worker_id,),
+        )
+
+
 def main() -> None:
     settings = Settings()  # type: ignore[call-arg]
     database_url = str(settings.database_url)
@@ -56,6 +72,7 @@ def main() -> None:
     )
     recovered = recover_stale_jobs(database_url)
     recovered_disposals = recover_stale_disposal_jobs(database_url)
+    record_worker_heartbeat(database_url, settings.worker_id)
     logger.info("worker_ready pid=%s", os.getpid())
     if recovered:
         logger.warning("ingestion_leases_recovered count=%s", recovered)
@@ -63,8 +80,12 @@ def main() -> None:
         logger.warning("source_disposal_leases_recovered count=%s", recovered_disposals)
 
     last_cleanup: float | None = None
+    last_heartbeat = time.monotonic()
     while True:
         current_time = time.monotonic()
+        if current_time - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            record_worker_heartbeat(database_url, settings.worker_id)
+            last_heartbeat = current_time
         if last_cleanup is None or current_time - last_cleanup >= SESSION_CLEANUP_INTERVAL_SECONDS:
             deleted = cleanup_expired_sessions(database_url)
             logger.info("session_cleanup_complete deleted=%s", deleted)
