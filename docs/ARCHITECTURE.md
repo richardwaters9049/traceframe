@@ -182,6 +182,22 @@ case audit histories. Selecting a case keeps navigation state inside
 `GET /api/cases/:id`. Additional register pages use the same cursor through
 `GET /api/cases`. Only `/` and `/dashboard` are user-facing page routes.
 
+## Operational observability
+
+The Python worker upserts a database-timestamped heartbeat every ten seconds
+into `service_heartbeats`. The authenticated, non-cacheable
+`GET /api/operations/status` boundary combines the newest worker heartbeat with
+a database query, a source-bucket reachability probe, and aggregate ingestion
+and disposal job counts. A heartbeat is available for 30 seconds, degraded for
+the following 90 seconds, and unavailable after two minutes.
+
+The Architecture workspace polls that boundary every 15 seconds and also
+supports explicit refresh. It receives only coarse service states, timestamps,
+and aggregate counts. Internal addresses, worker identifiers, case IDs, source
+names, object keys, credentials, and underlying exception messages remain
+server-side. Container health checks continue to serve orchestration readiness;
+the database heartbeat provides cross-process liveness for the protected UI.
+
 ## Case lifecycle
 
 Analysts and admins can transition a case between `open` and `closed` through

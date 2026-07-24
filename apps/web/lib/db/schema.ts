@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -186,3 +187,19 @@ export const loginThrottle = pgTable("login_throttle", {
   blockedUntil: timestamp("blocked_until", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [index("login_throttle_updated_at_idx").on(table.updatedAt)]);
+
+export const serviceHeartbeats = pgTable("service_heartbeats", {
+  serviceName: text("service_name").notNull(),
+  instanceId: text("instance_id").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({
+    columns: [table.serviceName, table.instanceId],
+    name: "service_heartbeats_pk",
+  }),
+  index("service_heartbeats_service_last_seen_idx").on(
+    table.serviceName,
+    table.lastSeenAt.desc(),
+  ),
+]);

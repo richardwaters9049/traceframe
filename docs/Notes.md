@@ -54,3 +54,5 @@ Added bounded user-agent observations across ingestion, findings, exports, and
 cross-source relationships.
 Added audited recovery for terminal ingestion failures, including bounded
 attempt details, retained-original checks, and a guided requeue flow.
+Added authenticated service observability with durable worker heartbeats,
+storage reachability, aggregate pipeline state, and a live Architecture view.
